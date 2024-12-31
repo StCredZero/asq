@@ -60,7 +60,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/alexflint/go-arg"
+	arg "github.com/alexflint/go-arg"
 )
 
 // Args defines the command line arguments
@@ -240,23 +240,23 @@ func main() {
 		// Create a single FileSet for all operations
 		fset := token.NewFileSet()
 
-		// Parse the query file to extract the lanq_query function body
+		// Parse the query file to extract the asq_query function body
 		queryFile, err := parser.ParseFile(fset, args.Find.Filepath, nil, parser.ParseComments)
 		if err != nil {
 			fmt.Printf("Error parsing query file: %v\n", err)
 			os.Exit(1)
 		}
 
-		// Find the lanq_query function and extract its body
+		// Find the asq_query function and extract its body
 		var queryBody *ast.BlockStmt
 		ast.Inspect(queryFile, func(n ast.Node) bool {
-			if fn, ok := n.(*ast.FuncDecl); ok && fn.Name.Name == "lanq_query" {
+			if fn, ok := n.(*ast.FuncDecl); ok && fn.Name.Name == "asq_query" {
 				queryBody = fn.Body
-				// Filter out lanq_end() call from queryBody
+				// Filter out asq_end() call from queryBody
 				for i, stmt := range queryBody.List {
 					if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
 						if callExpr, ok := exprStmt.X.(*ast.CallExpr); ok {
-							if funIdent, ok := callExpr.Fun.(*ast.Ident); ok && funIdent.Name == "lanq_end" {
+							if funIdent, ok := callExpr.Fun.(*ast.Ident); ok && funIdent.Name == "asq_end" {
 								queryBody.List = append(queryBody.List[:i], queryBody.List[i+1:]...)
 								break
 							}
@@ -269,7 +269,7 @@ func main() {
 		})
 
 		if queryBody == nil {
-			fmt.Printf("Error: lanq_query function not found in %s\n", args.Find.Filepath)
+			fmt.Printf("Error: asq_query function not found in %s\n", args.Find.Filepath)
 			os.Exit(1)
 		}
 
