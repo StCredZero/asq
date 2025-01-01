@@ -259,7 +259,6 @@ func FindMatches(pattern *ast.BlockStmt, filePath string) ([]string, error) {
 
 			// Look for the second statement after the first match
 			for j := i + 1; j < len(body.List); j++ {
-				secondStmtLine := fset.Position(body.List[j].Pos()).Line
 				if matchStatement(patternStmts[1], body.List[j]) {
 					
 					match := fmt.Sprintf("%s:%d", filePath, firstStmtLine)
