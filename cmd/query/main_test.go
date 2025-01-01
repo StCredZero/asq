@@ -39,13 +39,30 @@ func (e *E) Inst() *E { return e }
 
 func Test1() {
     e := &E{}
+
+
+
+
+
+
     e.Inst().Foo()
 }
 
 func Test2() {
+
+
+
+
+
+
     e := &E{}
-    x := 42
+
+
+
+
     e.Inst().Foo()
+
+    x := 42
     y := 43
 }`,
 	}
@@ -93,8 +110,8 @@ func Test2() {
 			name: "Find command with pattern",
 			args: []string{"asq", "find", "asq_query.go"},
 			contains: []string{
-				"test001.go:6",
-				"test001.go:12",
+				"test001.go:14",
+				"test001.go:22",
 			},
 		},
 		{

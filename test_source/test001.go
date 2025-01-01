@@ -1,15 +1,25 @@
 package test
 
-import "github.com/stcredzero/asq/test_source/common"
+type BulletPilot struct{}
 
-func Test1() {
-	e := &common.E{}
+func (e *BulletPilot) Inst() *BulletPilot {
+	return e
+}
+
+func (e *BulletPilot) Foo() bool {
+	return e == nil
+}
+
+func SourceTest1(e *BulletPilot) string {
+	e.Inst().Foo()
+	return "foo false"
+}
+
+func SourceTest2(e *BulletPilot) {
 	e.Inst().Foo()
 }
 
-func Test2() {
-	e := &common.E{}
-	_ = 42 // Intentionally unused
+func SourceTest3(e *BulletPilot) {
 	e.Inst().Foo()
-	_ = 43 // Intentionally unused
+	e.Foo()
 }

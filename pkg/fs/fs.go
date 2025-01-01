@@ -54,8 +54,8 @@ func BuildFileTree(root string, fset *token.FileSet) (map[string]interface{}, er
 		if info.IsDir() {
 			current[lastComp] = make(map[string]interface{})
 		} else {
-			// Skip files with asq_ prefix except for asq_query.go
-			if strings.HasPrefix(lastComp, "asq_") && lastComp != "asq_query.go" {
+			// Skip files with asq_ or lanq_ prefix
+			if strings.HasPrefix(lastComp, "lanq_") || strings.HasPrefix(lastComp, "asq_") {
 				return nil
 			}
 

