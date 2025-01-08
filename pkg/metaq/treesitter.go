@@ -22,7 +22,10 @@ func convertNode(node ast.Node) string {
 	case *ast.SelectorExpr:
 		return convertSelectorExpr(n)
 	case *ast.Ident:
-		return "(identifier)"
+		if strings.HasPrefix(n.Name, "wildcarded_") {
+			return "(identifier)"
+		}
+		return fmt.Sprintf(`(identifier) @name (#eq? @name "%s")`, n.Name)
 	default:
 		return fmt.Sprintf("(%T)", n)
 	}
@@ -40,6 +43,7 @@ func convertSelectorExpr(sel *ast.SelectorExpr) string {
 	var sb strings.Builder
 	sb.WriteString("(selector_expression operand: ")
 	sb.WriteString(convertNode(sel.X))
-	sb.WriteString(" field: (field_identifier))")
+	// Always use exact matching for field identifiers (Inst, Foo)
+	sb.WriteString(fmt.Sprintf(` field: (field_identifier) @field (#eq? @field "%s"))`, sel.Sel.Name))
 	return sb.String()
 }
