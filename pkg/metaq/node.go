@@ -154,12 +154,3 @@ type DefaultNode struct {
 func (d *DefaultNode) Convert() string {
 	return fmt.Sprintf("(%T)", d.Node)
 }
-
-// DefaultNode wraps any unimplemented ast.Node type
-type DefaultNode struct {
-	Node ast.Node
-}
-
-func (d *DefaultNode) Convert() string {
-	return fmt.Sprintf("(%T)", d.Node)
-}
