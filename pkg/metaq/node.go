@@ -6,57 +6,63 @@ import (
 	"strings"
 )
 
-// Node is the interface that all metaq nodes implement.
-type Node interface {
-	Convert() string
-}
-
-// Inspect traverses a metaq Node in depth-first order.
-// This parallels ast.Inspect(node ast.Node, fn func(ast.Node) bool).
-func Inspect(n Node, fn func(Node) bool) {
-	if n == nil {
-		return
-	}
-	if !fn(n) {
-		return
-	}
-	// TODO: We'll handle children once we define them in each Node struct
-	// stub
-}
-
-// BuildMetaqNode converts an ast.Node to its corresponding metaq.Node
-func BuildMetaqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
+// BuildAsqNode converts an ast.Node to its corresponding metaq.Node
+func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	if node == nil {
 		return nil
 	}
 
-	switch n := node.(type) {
+	switch astObj := node.(type) {
 	case *ast.CallExpr:
 		return &CallExpr{
-			Call: n,
-			Fun:  BuildMetaqNode(n.Fun, wildcardIdent),
+			Ast: astObj,
+			Fun: BuildAsqExpr(astObj.Fun, wildcardIdent),
 		}
 	case *ast.SelectorExpr:
 		return &SelectorExpr{
-			Sel: n,
-			X:   BuildMetaqNode(n.X, wildcardIdent),
+			Ast: astObj,
+			X:   BuildAsqExpr(astObj.X, wildcardIdent),
 		}
 	case *ast.Ident:
-		_, isWildcard := wildcardIdent[n]
+		_, isWildcard := wildcardIdent[astObj]
 		return &Ident{
-			Id:       n,
+			Ast:      astObj,
 			Wildcard: isWildcard,
 		}
 	default:
-		return &DefaultNode{Node: n}
+		return &DefaultNode{Node: astObj}
+	}
+}
+
+// BuildAsqExpr converts an ast.Node to its corresponding metaq.Node
+func BuildAsqExpr(node ast.Node, wildcardIdent map[*ast.Ident]bool) Expr {
+	if node == nil {
+		return nil
+	}
+
+	switch astObj := node.(type) {
+	case *ast.CallExpr:
+		return &CallExpr{
+			Ast: astObj,
+			Fun: BuildAsqExpr(astObj.Fun, wildcardIdent),
+		}
+	case *ast.SelectorExpr:
+		return &SelectorExpr{
+			Ast: astObj,
+			X:   BuildAsqExpr(astObj.X, wildcardIdent),
+		}
+	default:
+		return &DefaultExpr{Node: astObj}
 	}
 }
 
 // CallExpr wraps an ast.CallExpr node
 type CallExpr struct {
-	Call *ast.CallExpr
-	Fun  Node
+	Ast *ast.CallExpr
+	Fun Expr
 }
+
+func (c *CallExpr) exprNode() {}
 
 func (c *CallExpr) Convert() string {
 	var sb strings.Builder
@@ -66,23 +72,42 @@ func (c *CallExpr) Convert() string {
 	return sb.String()
 }
 
+func (c *CallExpr) Pos() Pos {
+	return Pos(c.Ast.Pos())
+}
+func (c *CallExpr) Lparen() Pos {
+	return Pos(c.Ast.Lparen)
+}
+func (c *CallExpr) Ellipsis() Pos {
+	return Pos(c.Ast.Ellipsis)
+}
+func (c *CallExpr) Rparen() Pos {
+	return Pos(c.Ast.Rparen)
+}
+
 // SelectorExpr wraps an ast.SelectorExpr node
 type SelectorExpr struct {
-	Sel *ast.SelectorExpr
-	X   Node
+	Ast *ast.SelectorExpr
+	X   Expr
 }
+
+func (s *SelectorExpr) exprNode() {}
 
 func (s *SelectorExpr) Convert() string {
 	var sb strings.Builder
 	sb.WriteString("(selector_expression operand: ")
 	sb.WriteString(s.X.Convert())
-	sb.WriteString(fmt.Sprintf(` field: (field_identifier) @field (#eq? @field "%s"))`, s.Sel.Sel.Name))
+	sb.WriteString(fmt.Sprintf(` field: (field_identifier) @field (#eq? @field "%s"))`, s.Ast.Sel.Name))
 	return sb.String()
+}
+
+func (s *SelectorExpr) Pos() Pos {
+	return Pos(s.Ast.Pos())
 }
 
 // Ident wraps an ast.Ident node with an additional Wildcard field
 type Ident struct {
-	Id       *ast.Ident
+	Ast      *ast.Ident
 	Wildcard bool
 }
 
@@ -90,7 +115,15 @@ func (i *Ident) Convert() string {
 	if i.Wildcard {
 		return "(identifier)"
 	}
-	return fmt.Sprintf(`(identifier) @name (#eq? @name "%s")`, i.Id.Name)
+	return fmt.Sprintf(`(identifier) @name (#eq? @name "%s")`, i.Ast.Name)
+}
+
+func (i *Ident) Pos() Pos {
+	return Pos(i.Ast.Pos())
+}
+
+func (i *Ident) Name() string {
+	return i.Ast.Name
 }
 
 // The following ast.Node types have not been fully implemented yet:
@@ -154,4 +187,23 @@ type DefaultNode struct {
 
 func (d *DefaultNode) Convert() string {
 	return fmt.Sprintf("(%T)", d.Node)
+}
+
+func (d *DefaultNode) Pos() Pos {
+	return Pos(0)
+}
+
+// DefaultExpr wraps any ast.Expr type that doesn't have a specific implementation
+type DefaultExpr struct {
+	Node ast.Node
+}
+
+func (d *DefaultExpr) exprNode() {}
+
+func (d *DefaultExpr) Convert() string {
+	return fmt.Sprintf("(%T)", d.Node)
+}
+
+func (d *DefaultExpr) Pos() Pos {
+	return Pos(0)
 }

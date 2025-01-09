@@ -44,8 +44,8 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 	source := string(sourceBytes)
 
 	// Find the code between comments in the source
-	startOffset := int(fset.Position(startPos).Offset)
-	endOffset := int(fset.Position(endPos).Offset)
+	startOffset := fset.Position(startPos).Offset
+	endOffset := fset.Position(endPos).Offset
 	wildcardIdent := make(map[*ast.Ident]bool)
 	if startOffset >= 0 && endOffset > startOffset && endOffset <= len(source) {
 		codeBlock := source[startOffset:endOffset]
@@ -59,7 +59,7 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 				}
 				// Mark identifiers that appear right after /***/ as wildcards
 				if ident, ok := n.(*ast.Ident); ok {
-					identPos := int(fset.Position(ident.Pos()).Offset)
+					identPos := fset.Position(ident.Pos()).Offset
 					wildcardIdent[ident] = identPos > wildcardPos && identPos-wildcardPos <= 5
 				}
 				return true
