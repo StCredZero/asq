@@ -2,7 +2,6 @@ package metaq
 
 import (
 	"go/ast"
-	"strings"
 )
 
 // convertToTreeSitterQuery converts a Go AST node to a tree-sitter query string

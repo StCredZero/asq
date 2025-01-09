@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/stcredzero/asq/pkg/metaq"
+	"github.com/StCredZero/asq/pkg/metaq"
 )
 
 func main() {
