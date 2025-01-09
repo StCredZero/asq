@@ -46,6 +46,7 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 	// Find the code between comments in the source
 	startOffset := int(fset.Position(startPos).Offset)
 	endOffset := int(fset.Position(endPos).Offset)
+	wildcardIdent := make(map[*ast.Ident]bool)
 	if startOffset >= 0 && endOffset > startOffset && endOffset <= len(source) {
 		codeBlock := source[startOffset:endOffset]
 		hasWildcard = strings.Contains(codeBlock, "/***/")
@@ -59,9 +60,7 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 				// Mark identifiers that appear right after /***/ as wildcards
 				if ident, ok := n.(*ast.Ident); ok {
 					identPos := int(fset.Position(ident.Pos()).Offset)
-					if identPos > wildcardPos && identPos-wildcardPos <= 5 { // 5 is length of /***/
-						ident.Name = "wildcarded_" + ident.Name
-					}
+					wildcardIdent[ident] = identPos > wildcardPos && identPos-wildcardPos <= 5
 				}
 				return true
 			})
@@ -88,5 +87,5 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 	}
 
 	// Convert to tree-sitter query
-	return convertToTreeSitterQuery(exprNode), nil
+	return convertToTreeSitterQuery(exprNode, wildcardIdent), nil
 }
