@@ -33,12 +33,12 @@ func BuildMetaqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	switch n := node.(type) {
 	case *ast.CallExpr:
 		return &CallExpr{
-			Call: n,
-			Fun:  BuildMetaqNode(n.Fun, wildcardIdent),
+			Ast: n,
+			Fun: BuildMetaqNode(n.Fun, wildcardIdent),
 		}
 	case *ast.SelectorExpr:
 		return &SelectorExpr{
-			Sel: n,
+			Ast: n,
 			X:   BuildMetaqNode(n.X, wildcardIdent),
 		}
 	case *ast.Ident:
@@ -54,8 +54,8 @@ func BuildMetaqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 
 // CallExpr wraps an ast.CallExpr node
 type CallExpr struct {
-	Call *ast.CallExpr
-	Fun  Node
+	Ast *ast.CallExpr
+	Fun Node
 }
 
 func (c *CallExpr) Convert() string {
@@ -68,7 +68,7 @@ func (c *CallExpr) Convert() string {
 
 // SelectorExpr wraps an ast.SelectorExpr node
 type SelectorExpr struct {
-	Sel *ast.SelectorExpr
+	Ast *ast.SelectorExpr
 	X   Node
 }
 
@@ -76,7 +76,7 @@ func (s *SelectorExpr) Convert() string {
 	var sb strings.Builder
 	sb.WriteString("(selector_expression operand: ")
 	sb.WriteString(s.X.Convert())
-	sb.WriteString(fmt.Sprintf(` field: (field_identifier) @field (#eq? @field "%s"))`, s.Sel.Sel.Name))
+	sb.WriteString(fmt.Sprintf(` field: (field_identifier) @field (#eq? @field "%s"))`, s.Ast.Sel.Name))
 	return sb.String()
 }
 
