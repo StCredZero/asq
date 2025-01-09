@@ -25,7 +25,7 @@ func Inspect(n Node, fn func(Node) bool) {
 }
 
 // BuildMetaqNode converts an ast.Node to its corresponding metaq.Node
-func BuildMetaqNode(node ast.Node) Node {
+func BuildMetaqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	if node == nil {
 		return nil
 	}
@@ -34,17 +34,18 @@ func BuildMetaqNode(node ast.Node) Node {
 	case *ast.CallExpr:
 		return &CallExpr{
 			Call: n,
-			Fun:  BuildMetaqNode(n.Fun),
+			Fun:  BuildMetaqNode(n.Fun, wildcardIdent),
 		}
 	case *ast.SelectorExpr:
 		return &SelectorExpr{
 			Sel: n,
-			X:   BuildMetaqNode(n.X),
+			X:   BuildMetaqNode(n.X, wildcardIdent),
 		}
 	case *ast.Ident:
+		_, isWildcard := wildcardIdent[n]
 		return &Ident{
 			Id:       n,
-			Wildcard: strings.HasPrefix(n.Name, "wildcarded_"),
+			Wildcard: isWildcard,
 		}
 	default:
 		return &DefaultNode{Node: n}
