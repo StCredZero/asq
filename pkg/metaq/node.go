@@ -24,15 +24,43 @@ func Inspect(n Node, fn func(Node) bool) {
 	// stub
 }
 
+// BuildMetaqNode converts an ast.Node to its corresponding metaq.Node
+func BuildMetaqNode(node ast.Node) Node {
+	if node == nil {
+		return nil
+	}
+
+	switch n := node.(type) {
+	case *ast.CallExpr:
+		return &CallExpr{
+			Call: n,
+			Fun:  BuildMetaqNode(n.Fun),
+		}
+	case *ast.SelectorExpr:
+		return &SelectorExpr{
+			Sel: n,
+			X:   BuildMetaqNode(n.X),
+		}
+	case *ast.Ident:
+		return &Ident{
+			Id:       n,
+			Wildcard: strings.HasPrefix(n.Name, "wildcarded_"),
+		}
+	default:
+		return &DefaultNode{Node: n}
+	}
+}
+
 // CallExpr wraps an ast.CallExpr node
 type CallExpr struct {
 	Call *ast.CallExpr
+	Fun  Node
 }
 
 func (c *CallExpr) Convert() string {
 	var sb strings.Builder
 	sb.WriteString("(call_expression function: ")
-	sb.WriteString(convertNode(c.Call.Fun))
+	sb.WriteString(c.Fun.Convert())
 	sb.WriteString(" arguments: (argument_list))")
 	return sb.String()
 }
@@ -40,12 +68,13 @@ func (c *CallExpr) Convert() string {
 // SelectorExpr wraps an ast.SelectorExpr node
 type SelectorExpr struct {
 	Sel *ast.SelectorExpr
+	X   Node
 }
 
 func (s *SelectorExpr) Convert() string {
 	var sb strings.Builder
 	sb.WriteString("(selector_expression operand: ")
-	sb.WriteString(convertNode(s.Sel.X))
+	sb.WriteString(s.X.Convert())
 	sb.WriteString(fmt.Sprintf(` field: (field_identifier) @field (#eq? @field "%s"))`, s.Sel.Sel.Name))
 	return sb.String()
 }
@@ -126,26 +155,11 @@ func (d *DefaultNode) Convert() string {
 	return fmt.Sprintf("(%T)", d.Node)
 }
 
-// convertNode is a helper function that converts an ast.Node to its metaq equivalent
-// and returns the conversion result
-func convertNode(node ast.Node) string {
-	if node == nil {
-		return ""
-	}
+// DefaultNode wraps any unimplemented ast.Node type
+type DefaultNode struct {
+	Node ast.Node
+}
 
-	switch n := node.(type) {
-	case *ast.CallExpr:
-		return (&CallExpr{Call: n}).Convert()
-	case *ast.SelectorExpr:
-		return (&SelectorExpr{Sel: n}).Convert()
-	case *ast.Ident:
-		ident := &Ident{Id: n}
-		if strings.HasPrefix(n.Name, "wildcarded_") {
-			ident.Wildcard = true
-			ident.Id.Name = strings.TrimPrefix(n.Name, "wildcarded_")
-		}
-		return ident.Convert()
-	default:
-		return fmt.Sprintf("(%T)", n)
-	}
+func (d *DefaultNode) Convert() string {
+	return fmt.Sprintf("(%T)", d.Node)
 }

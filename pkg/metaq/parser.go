@@ -60,7 +60,9 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 				if ident, ok := n.(*ast.Ident); ok {
 					identPos := int(fset.Position(ident.Pos()).Offset)
 					if identPos > wildcardPos && identPos-wildcardPos <= 5 { // 5 is length of /***/
-						ident.Name = "wildcarded_" + ident.Name
+						if metaqIdent, ok := BuildMetaqNode(ident).(*Ident); ok {
+							metaqIdent.Wildcard = true
+						}
 					}
 				}
 				return true
