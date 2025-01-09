@@ -1,7 +1,6 @@
 package metaq
 
 import (
-	"fmt"
 	"go/ast"
 	"strings"
 )
@@ -18,32 +17,17 @@ func convertNode(node ast.Node) string {
 
 	switch n := node.(type) {
 	case *ast.CallExpr:
-		return convertCallExpr(n)
+		return (&CallExpr{Call: n}).Convert()
 	case *ast.SelectorExpr:
-		return convertSelectorExpr(n)
+		return (&SelectorExpr{Sel: n}).Convert()
 	case *ast.Ident:
+		ident := &Ident{Id: n}
 		if strings.HasPrefix(n.Name, "wildcarded_") {
-			return "(identifier)"
+			ident.Wildcard = true
+			ident.Id.Name = strings.TrimPrefix(n.Name, "wildcarded_")
 		}
-		return fmt.Sprintf(`(identifier) @name (#eq? @name "%s")`, n.Name)
+		return ident.Convert()
 	default:
-		return fmt.Sprintf("(%T)", n)
+		return (&DefaultNode{Node: n}).Convert()
 	}
-}
-
-func convertCallExpr(call *ast.CallExpr) string {
-	var sb strings.Builder
-	sb.WriteString("(call_expression function: ")
-	sb.WriteString(convertNode(call.Fun))
-	sb.WriteString(" arguments: (argument_list))")
-	return sb.String()
-}
-
-func convertSelectorExpr(sel *ast.SelectorExpr) string {
-	var sb strings.Builder
-	sb.WriteString("(selector_expression operand: ")
-	sb.WriteString(convertNode(sel.X))
-	// Always use exact matching for field identifiers (Inst, Foo)
-	sb.WriteString(fmt.Sprintf(` field: (field_identifier) @field (#eq? @field "%s"))`, sel.Sel.Name))
-	return sb.String()
 }
