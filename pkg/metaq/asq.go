@@ -9,7 +9,7 @@ type Pos int
 
 // Node is the interface that all metaq nodes implement.
 type Node interface {
-	WriteTreeSitterQuery(w io.Writer) string
+	WriteTreeSitterQuery(w io.Writer) error
 	AstNode() ast.Node
 }
 
