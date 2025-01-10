@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/StCredZero/asq/pkg/slicex"
 	"go/ast"
+	"io"
 	"strings"
 )
 
@@ -87,10 +88,10 @@ type CallExpr struct {
 
 func (c *CallExpr) exprNode() {}
 
-func (c *CallExpr) Convert() string {
+func (c *CallExpr) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(call_expression function: ")
-	sb.WriteString(c.Fun.Convert())
+	sb.WriteString(c.Fun.WriteTreeSitterQuery(nil))
 	sb.WriteString(" arguments: (argument_list))")
 	return sb.String()
 }
@@ -108,10 +109,10 @@ type SelectorExpr struct {
 
 func (s *SelectorExpr) exprNode() {}
 
-func (s *SelectorExpr) Convert() string {
+func (s *SelectorExpr) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(selector_expression operand: ")
-	sb.WriteString(s.X.Convert())
+	sb.WriteString(s.X.WriteTreeSitterQuery(nil))
 	sb.WriteString(fmt.Sprintf(` field: (field_identifier) @field (#eq? @field "%s"))`, s.Ast.Sel.Name))
 	return sb.String()
 }
@@ -128,7 +129,7 @@ type Ident struct {
 
 func (i *Ident) exprNode() {}
 
-func (i *Ident) Convert() string {
+func (i *Ident) WriteTreeSitterQuery(io.Writer) string {
 	if i.Wildcard {
 		return "(identifier)"
 	}
@@ -198,7 +199,7 @@ type DefaultNode struct {
 	Node ast.Node
 }
 
-func (d *DefaultNode) Convert() string {
+func (d *DefaultNode) WriteTreeSitterQuery(io.Writer) string {
 	return fmt.Sprintf("(%T)", d.Node)
 }
 
@@ -213,7 +214,7 @@ type DefaultExpr struct {
 
 func (d *DefaultExpr) exprNode() {}
 
-func (d *DefaultExpr) Convert() string {
+func (d *DefaultExpr) WriteTreeSitterQuery(io.Writer) string {
 	return fmt.Sprintf("(%T)", d.Node)
 }
 
@@ -228,7 +229,7 @@ type DefaultStmt struct {
 
 func (d *DefaultStmt) stmtNode() {}
 
-func (d *DefaultStmt) Convert() string {
+func (d *DefaultStmt) WriteTreeSitterQuery(io.Writer) string {
 	return fmt.Sprintf("(%T)", d.Ast)
 }
 
@@ -243,7 +244,7 @@ type DefaultDecl struct {
 
 func (d *DefaultDecl) declNode() {}
 
-func (d *DefaultDecl) Convert() string {
+func (d *DefaultDecl) WriteTreeSitterQuery(io.Writer) string {
 	return fmt.Sprintf("(%T)", d.Ast)
 }
 
@@ -260,7 +261,7 @@ type AssignStmt struct {
 
 func (a *AssignStmt) stmtNode() {}
 
-func (a *AssignStmt) Convert() string {
+func (a *AssignStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(assignment_expression")
 	sb.WriteString(" left: ")
@@ -268,14 +269,14 @@ func (a *AssignStmt) Convert() string {
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(lhs.Convert())
+		sb.WriteString(lhs.WriteTreeSitterQuery(nil))
 	}
 	sb.WriteString(" right: ")
 	for i, rhs := range a.Rhs {
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(rhs.Convert())
+		sb.WriteString(rhs.WriteTreeSitterQuery(nil))
 	}
 	sb.WriteString(")")
 	return sb.String()
@@ -292,7 +293,7 @@ type BadStmt struct {
 
 func (b *BadStmt) stmtNode() {}
 
-func (b *BadStmt) Convert() string {
+func (b *BadStmt) WriteTreeSitterQuery(io.Writer) string {
 	return "(bad_statement)"
 }
 
@@ -308,12 +309,12 @@ type BlockStmt struct {
 
 func (b *BlockStmt) stmtNode() {}
 
-func (b *BlockStmt) Convert() string {
+func (b *BlockStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(block")
 	for _, stmt := range b.List {
 		sb.WriteString(" ")
-		sb.WriteString(stmt.Convert())
+		sb.WriteString(stmt.WriteTreeSitterQuery(nil))
 	}
 	sb.WriteString(")")
 	return sb.String()
@@ -331,12 +332,12 @@ type BranchStmt struct {
 
 func (b *BranchStmt) stmtNode() {}
 
-func (b *BranchStmt) Convert() string {
+func (b *BranchStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(branch_statement")
 	if b.Label != nil {
 		sb.WriteString(" label: ")
-		sb.WriteString(b.Label.Convert())
+		sb.WriteString(b.Label.WriteTreeSitterQuery(nil))
 	}
 	sb.WriteString(")")
 	return sb.String()
@@ -354,8 +355,8 @@ type DeclStmt struct {
 
 func (d *DeclStmt) stmtNode() {}
 
-func (d *DeclStmt) Convert() string {
-	return d.Decl.Convert()
+func (d *DeclStmt) WriteTreeSitterQuery(io.Writer) string {
+	return d.Decl.WriteTreeSitterQuery(nil)
 }
 
 func (d *DeclStmt) AstNode() ast.Node {
@@ -370,10 +371,10 @@ type DeferStmt struct {
 
 func (d *DeferStmt) stmtNode() {}
 
-func (d *DeferStmt) Convert() string {
+func (d *DeferStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(defer_statement expression: ")
-	sb.WriteString(d.Call.Convert())
+	sb.WriteString(d.Call.WriteTreeSitterQuery(nil))
 	sb.WriteString(")")
 	return sb.String()
 }
@@ -389,7 +390,7 @@ type EmptyStmt struct {
 
 func (e *EmptyStmt) stmtNode() {}
 
-func (e *EmptyStmt) Convert() string {
+func (e *EmptyStmt) WriteTreeSitterQuery(io.Writer) string {
 	return "(empty_statement)"
 }
 
@@ -405,8 +406,8 @@ type ExprStmt struct {
 
 func (e *ExprStmt) stmtNode() {}
 
-func (e *ExprStmt) Convert() string {
-	return e.X.Convert()
+func (e *ExprStmt) WriteTreeSitterQuery(io.Writer) string {
+	return e.X.WriteTreeSitterQuery(nil)
 }
 
 func (e *ExprStmt) AstNode() ast.Node {
@@ -421,10 +422,10 @@ type GoStmt struct {
 
 func (g *GoStmt) stmtNode() {}
 
-func (g *GoStmt) Convert() string {
+func (g *GoStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(go_statement expression: ")
-	sb.WriteString(g.Call.Convert())
+	sb.WriteString(g.Call.WriteTreeSitterQuery(nil))
 	sb.WriteString(")")
 	return sb.String()
 }
@@ -444,24 +445,24 @@ type IfStmt struct {
 
 func (i *IfStmt) stmtNode() {}
 
-func (i *IfStmt) Convert() string {
+func (i *IfStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(if_statement")
 	if i.Init != nil {
 		sb.WriteString(" initializer: ")
-		sb.WriteString(i.Init.Convert())
+		sb.WriteString(i.Init.WriteTreeSitterQuery(nil))
 	}
 	if i.Cond != nil {
 		sb.WriteString(" condition: ")
-		sb.WriteString(i.Cond.Convert())
+		sb.WriteString(i.Cond.WriteTreeSitterQuery(nil))
 	}
 	if i.Body != nil {
 		sb.WriteString(" consequence: ")
-		sb.WriteString(i.Body.Convert())
+		sb.WriteString(i.Body.WriteTreeSitterQuery(nil))
 	}
 	if i.Else != nil {
 		sb.WriteString(" alternative: ")
-		sb.WriteString(i.Else.Convert())
+		sb.WriteString(i.Else.WriteTreeSitterQuery(nil))
 	}
 	sb.WriteString(")")
 	return sb.String()
@@ -479,10 +480,10 @@ type IncDecStmt struct {
 
 func (i *IncDecStmt) stmtNode() {}
 
-func (i *IncDecStmt) Convert() string {
+func (i *IncDecStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(inc_dec_statement expression: ")
-	sb.WriteString(i.X.Convert())
+	sb.WriteString(i.X.WriteTreeSitterQuery(nil))
 	sb.WriteString(")")
 	return sb.String()
 }
@@ -500,16 +501,16 @@ type LabeledStmt struct {
 
 func (l *LabeledStmt) stmtNode() {}
 
-func (l *LabeledStmt) Convert() string {
+func (l *LabeledStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(labeled_statement")
 	if l.Label != nil {
 		sb.WriteString(" label: ")
-		sb.WriteString(l.Label.Convert())
+		sb.WriteString(l.Label.WriteTreeSitterQuery(nil))
 	}
 	if l.Stmt != nil {
 		sb.WriteString(" statement: ")
-		sb.WriteString(l.Stmt.Convert())
+		sb.WriteString(l.Stmt.WriteTreeSitterQuery(nil))
 	}
 	sb.WriteString(")")
 	return sb.String()
@@ -530,24 +531,24 @@ type RangeStmt struct {
 
 func (r *RangeStmt) stmtNode() {}
 
-func (r *RangeStmt) Convert() string {
+func (r *RangeStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(range_statement")
 	if r.Key != nil {
 		sb.WriteString(" key: ")
-		sb.WriteString(r.Key.Convert())
+		sb.WriteString(r.Key.WriteTreeSitterQuery(nil))
 	}
 	if r.Value != nil {
 		sb.WriteString(" value: ")
-		sb.WriteString(r.Value.Convert())
+		sb.WriteString(r.Value.WriteTreeSitterQuery(nil))
 	}
 	if r.X != nil {
 		sb.WriteString(" expression: ")
-		sb.WriteString(r.X.Convert())
+		sb.WriteString(r.X.WriteTreeSitterQuery(nil))
 	}
 	if r.Body != nil {
 		sb.WriteString(" body: ")
-		sb.WriteString(r.Body.Convert())
+		sb.WriteString(r.Body.WriteTreeSitterQuery(nil))
 	}
 	sb.WriteString(")")
 	return sb.String()
@@ -565,12 +566,12 @@ type SelectStmt struct {
 
 func (s *SelectStmt) stmtNode() {}
 
-func (s *SelectStmt) Convert() string {
+func (s *SelectStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(select_statement")
 	if s.Body != nil {
 		sb.WriteString(" body: ")
-		sb.WriteString(s.Body.Convert())
+		sb.WriteString(s.Body.WriteTreeSitterQuery(nil))
 	}
 	sb.WriteString(")")
 	return sb.String()
@@ -589,16 +590,16 @@ type SendStmt struct {
 
 func (s *SendStmt) stmtNode() {}
 
-func (s *SendStmt) Convert() string {
+func (s *SendStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(send_statement")
 	if s.Chan != nil {
 		sb.WriteString(" channel: ")
-		sb.WriteString(s.Chan.Convert())
+		sb.WriteString(s.Chan.WriteTreeSitterQuery(nil))
 	}
 	if s.Value != nil {
 		sb.WriteString(" value: ")
-		sb.WriteString(s.Value.Convert())
+		sb.WriteString(s.Value.WriteTreeSitterQuery(nil))
 	}
 	sb.WriteString(")")
 	return sb.String()
@@ -618,20 +619,20 @@ type SwitchStmt struct {
 
 func (s *SwitchStmt) stmtNode() {}
 
-func (s *SwitchStmt) Convert() string {
+func (s *SwitchStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(switch_statement")
 	if s.Init != nil {
 		sb.WriteString(" initializer: ")
-		sb.WriteString(s.Init.Convert())
+		sb.WriteString(s.Init.WriteTreeSitterQuery(nil))
 	}
 	if s.Tag != nil {
 		sb.WriteString(" value: ")
-		sb.WriteString(s.Tag.Convert())
+		sb.WriteString(s.Tag.WriteTreeSitterQuery(nil))
 	}
 	if s.Body != nil {
 		sb.WriteString(" body: ")
-		sb.WriteString(s.Body.Convert())
+		sb.WriteString(s.Body.WriteTreeSitterQuery(nil))
 	}
 	sb.WriteString(")")
 	return sb.String()
@@ -651,20 +652,20 @@ type TypeSwitchStmt struct {
 
 func (t *TypeSwitchStmt) stmtNode() {}
 
-func (t *TypeSwitchStmt) Convert() string {
+func (t *TypeSwitchStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(type_switch_statement")
 	if t.Init != nil {
 		sb.WriteString(" initializer: ")
-		sb.WriteString(t.Init.Convert())
+		sb.WriteString(t.Init.WriteTreeSitterQuery(nil))
 	}
 	if t.Assign != nil {
 		sb.WriteString(" assign: ")
-		sb.WriteString(t.Assign.Convert())
+		sb.WriteString(t.Assign.WriteTreeSitterQuery(nil))
 	}
 	if t.Body != nil {
 		sb.WriteString(" body: ")
-		sb.WriteString(t.Body.Convert())
+		sb.WriteString(t.Body.WriteTreeSitterQuery(nil))
 	}
 	sb.WriteString(")")
 	return sb.String()
@@ -682,7 +683,7 @@ type ReturnStmt struct {
 
 func (r *ReturnStmt) stmtNode() {}
 
-func (r *ReturnStmt) Convert() string {
+func (r *ReturnStmt) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(return_statement")
 	if len(r.Results) > 0 {
@@ -692,7 +693,7 @@ func (r *ReturnStmt) Convert() string {
 			if ident, ok := result.(*Ident); ok {
 				sb.WriteString(fmt.Sprintf(`(identifier) @value (#eq? @value "%s")`, ident.Ast.Name))
 			} else {
-				sb.WriteString(result.Convert())
+				sb.WriteString(result.WriteTreeSitterQuery(nil))
 			}
 		}
 		sb.WriteString(")")
@@ -714,20 +715,20 @@ type FuncDecl struct {
 
 func (f *FuncDecl) declNode() {}
 
-func (f *FuncDecl) Convert() string {
+func (f *FuncDecl) WriteTreeSitterQuery(io.Writer) string {
 	var sb strings.Builder
 	sb.WriteString("(function_declaration")
 	if f.Name != nil {
 		sb.WriteString(" name: ")
-		sb.WriteString(f.Name.Convert())
+		sb.WriteString(f.Name.WriteTreeSitterQuery(nil))
 	}
 	if f.Body != nil {
 		if block, ok := f.Body.(*BlockStmt); ok && len(block.List) == 1 {
 			sb.WriteString(" body: ")
-			sb.WriteString(block.List[0].Convert())
+			sb.WriteString(block.List[0].WriteTreeSitterQuery(nil))
 		} else {
 			sb.WriteString(" body: ")
-			sb.WriteString(f.Body.Convert())
+			sb.WriteString(f.Body.WriteTreeSitterQuery(nil))
 		}
 	}
 	sb.WriteString(")")

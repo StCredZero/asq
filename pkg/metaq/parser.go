@@ -90,6 +90,6 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 		return "", fmt.Errorf("no node found between comments")
 	}
 
-	// Convert to tree-sitter query
+	// WriteTreeSitterQuery to tree-sitter query
 	return convertToTreeSitterQuery(foundNode, wildcardIdent), nil
 }
