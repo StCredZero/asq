@@ -68,24 +68,28 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 	}
 
 	// Extract the AST nodes between the comments
-	var exprNode ast.Expr
+	var foundNode ast.Node
 	ast.Inspect(file, func(n ast.Node) bool {
 		if n == nil {
 			return true
 		}
 		if n.Pos() >= startPos && n.End() <= endPos {
-			if stmt, ok := n.(*ast.ExprStmt); ok {
-				exprNode = stmt.X
+			switch node := n.(type) {
+			case *ast.ExprStmt:
+				foundNode = node.X
+				return false
+			case *ast.ReturnStmt, *ast.FuncDecl:
+				foundNode = node
 				return false
 			}
 		}
 		return true
 	})
 
-	if exprNode == nil {
-		return "", fmt.Errorf("no expression found between comments")
+	if foundNode == nil {
+		return "", fmt.Errorf("no node found between comments")
 	}
 
 	// Convert to tree-sitter query
-	return convertToTreeSitterQuery(exprNode, wildcardIdent), nil
+	return convertToTreeSitterQuery(foundNode, wildcardIdent), nil
 }

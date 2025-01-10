@@ -1,11 +1,13 @@
 package metaq
 
+import "go/ast"
+
 type Pos int
 
 // Node is the interface that all metaq nodes implement.
 type Node interface {
 	Convert() string
-	Pos() Pos
+	AstNode() ast.Node
 }
 
 // Expr nodes contain expressions and implement the Expr interface.
