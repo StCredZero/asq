@@ -30,6 +30,10 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 			Ast:      astObj,
 			Wildcard: isWildcard,
 		}
+	case ast.Stmt:
+		return BuildAsqStmt(astObj, wildcardIdent)
+	case ast.Decl:
+		return BuildAsqDecl(astObj, wildcardIdent)
 	default:
 		return &DefaultNode{Node: astObj}
 	}
@@ -200,4 +204,126 @@ func (d *DefaultExpr) Convert() string {
 
 func (d *DefaultExpr) Pos() Pos {
 	return Pos(0)
+}
+
+// DefaultStmt wraps any ast.Stmt type that doesn't have a specific implementation
+type DefaultStmt struct {
+	Ast ast.Stmt
+}
+
+func (d *DefaultStmt) stmtNode() {}
+
+func (d *DefaultStmt) Convert() string {
+	return fmt.Sprintf("(%T)", d.Ast)
+}
+
+func (d *DefaultStmt) Pos() Pos {
+	return Pos(d.Ast.Pos())
+}
+
+// DefaultDecl wraps any ast.Decl type that doesn't have a specific implementation
+type DefaultDecl struct {
+	Ast ast.Decl
+}
+
+func (d *DefaultDecl) declNode() {}
+
+func (d *DefaultDecl) Convert() string {
+	return fmt.Sprintf("(%T)", d.Ast)
+}
+
+func (d *DefaultDecl) Pos() Pos {
+	return Pos(d.Ast.Pos())
+}
+
+// ReturnStmt wraps an ast.ReturnStmt node
+type ReturnStmt struct {
+	Ast     *ast.ReturnStmt
+	Results []Expr
+}
+
+func (r *ReturnStmt) stmtNode() {}
+
+func (r *ReturnStmt) Convert() string {
+	var sb strings.Builder
+	sb.WriteString("(return_statement")
+	if len(r.Results) > 0 {
+		sb.WriteString(" values: (expression_list")
+		for _, result := range r.Results {
+			sb.WriteString(" ")
+			sb.WriteString(result.Convert())
+		}
+		sb.WriteString(")")
+	}
+	sb.WriteString(")")
+	return sb.String()
+}
+
+func (r *ReturnStmt) Pos() Pos {
+	return Pos(r.Ast.Pos())
+}
+
+// FuncDecl wraps an ast.FuncDecl node
+type FuncDecl struct {
+	Ast  *ast.FuncDecl
+	Name *Ident
+	Body Node
+}
+
+func (f *FuncDecl) declNode() {}
+
+func (f *FuncDecl) Convert() string {
+	var sb strings.Builder
+	sb.WriteString("(function_declaration")
+	if f.Name != nil {
+		sb.WriteString(" name: ")
+		sb.WriteString(f.Name.Convert())
+	}
+	if f.Body != nil {
+		sb.WriteString(" body: ")
+		sb.WriteString(f.Body.Convert())
+	}
+	sb.WriteString(")")
+	return sb.String()
+}
+
+func (f *FuncDecl) Pos() Pos {
+	return Pos(f.Ast.Pos())
+}
+
+// BuildAsqStmt converts an ast.Stmt to its corresponding metaq.Stmt
+func BuildAsqStmt(stmt ast.Stmt, wildcardIdent map[*ast.Ident]bool) Stmt {
+	if stmt == nil {
+		return nil
+	}
+
+	switch s := stmt.(type) {
+	case *ast.ReturnStmt:
+		return &ReturnStmt{
+			Ast: s,
+			Results: slicex.Map(s.Results, func(result ast.Expr) Expr {
+				return BuildAsqExpr(result, wildcardIdent)
+			}),
+		}
+	default:
+		return &DefaultStmt{Ast: s}
+	}
+}
+
+// BuildAsqDecl converts an ast.Decl to its corresponding metaq.Decl
+func BuildAsqDecl(decl ast.Decl, wildcardIdent map[*ast.Ident]bool) Decl {
+	if decl == nil {
+		return nil
+	}
+
+	switch d := decl.(type) {
+	case *ast.FuncDecl:
+		return &FuncDecl{
+			Ast:  d,
+			Name: BuildAsqExpr(d.Name, wildcardIdent).(*Ident),
+			Body: BuildAsqNode(d.Body, wildcardIdent),
+		}
+	default:
+		return &DefaultDecl{Ast: d}
+	}
 }

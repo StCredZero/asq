@@ -71,6 +71,36 @@ func asq_query2() {
 }`,
 			expected: `(call_expression function: (selector_expression operand: (call_expression function: (selector_expression operand: (identifier) @name (#eq? @name "e") field: (field_identifier) @field (#eq? @field "Inst2")) arguments: (argument_list)) field: (field_identifier) @field (#eq? @field "Foo")) arguments: (argument_list)) @x`,
 		},
+		{
+			name: "return_stmt_no_results",
+			code: `package example1
+func example() {
+	//asq_start
+	return
+	//asq_end
+}`,
+			expected: `(return_statement) @x`,
+		},
+		{
+			name: "return_stmt_with_result",
+			code: `package example1
+func example() bool {
+	//asq_start
+	return true
+	//asq_end
+}`,
+			expected: `(return_statement values: (expression_list (identifier) @value (#eq? @value "true"))) @x`,
+		},
+		{
+			name: "function_declaration",
+			code: `package example1
+//asq_start
+func Example() {
+	return
+}
+//asq_end`,
+			expected: `(function_declaration name: (identifier) @name (#eq? @name "Example") body: (return_statement)) @x`,
+		},
 	}
 
 	for _, tt := range tests {
