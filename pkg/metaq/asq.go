@@ -1,12 +1,15 @@
 package metaq
 
-import "go/ast"
+import (
+	"go/ast"
+	"io"
+)
 
 type Pos int
 
 // Node is the interface that all metaq nodes implement.
 type Node interface {
-	Convert() string
+	WriteTreeSitterQuery(w io.Writer) string
 	AstNode() ast.Node
 }
 
