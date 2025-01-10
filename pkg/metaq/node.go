@@ -75,15 +75,6 @@ func (c *CallExpr) Convert() string {
 func (c *CallExpr) Pos() Pos {
 	return Pos(c.Ast.Pos())
 }
-func (c *CallExpr) Lparen() Pos {
-	return Pos(c.Ast.Lparen)
-}
-func (c *CallExpr) Ellipsis() Pos {
-	return Pos(c.Ast.Ellipsis)
-}
-func (c *CallExpr) Rparen() Pos {
-	return Pos(c.Ast.Rparen)
-}
 
 // SelectorExpr wraps an ast.SelectorExpr node
 type SelectorExpr struct {
@@ -120,10 +111,6 @@ func (i *Ident) Convert() string {
 
 func (i *Ident) Pos() Pos {
 	return Pos(i.Ast.Pos())
-}
-
-func (i *Ident) Name() string {
-	return i.Ast.Name
 }
 
 // The following ast.Node types have not been fully implemented yet:
