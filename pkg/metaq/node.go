@@ -2,6 +2,7 @@ package metaq
 
 import (
 	"fmt"
+	"github.com/StCredZero/asq/pkg/slicex"
 	"go/ast"
 	"strings"
 )
@@ -45,6 +46,9 @@ func BuildAsqExpr(node ast.Node, wildcardIdent map[*ast.Ident]bool) Expr {
 		return &CallExpr{
 			Ast: astObj,
 			Fun: BuildAsqExpr(astObj.Fun, wildcardIdent),
+			Args: slicex.Map(astObj.Args, func(arg ast.Expr) Expr {
+				return BuildAsqExpr(arg, wildcardIdent)
+			}),
 		}
 	case *ast.SelectorExpr:
 		return &SelectorExpr{
@@ -58,8 +62,10 @@ func BuildAsqExpr(node ast.Node, wildcardIdent map[*ast.Ident]bool) Expr {
 
 // CallExpr wraps an ast.CallExpr node
 type CallExpr struct {
-	Ast *ast.CallExpr
-	Fun Expr
+	Ast      *ast.CallExpr
+	Fun      Expr
+	Args     []Expr
+	Wildcard bool
 }
 
 func (c *CallExpr) exprNode() {}
@@ -78,8 +84,9 @@ func (c *CallExpr) Pos() Pos {
 
 // SelectorExpr wraps an ast.SelectorExpr node
 type SelectorExpr struct {
-	Ast *ast.SelectorExpr
-	X   Expr
+	Ast      *ast.SelectorExpr
+	X        Expr
+	Wildcard bool
 }
 
 func (s *SelectorExpr) exprNode() {}
