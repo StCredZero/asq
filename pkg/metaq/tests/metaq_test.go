@@ -99,7 +99,7 @@ func Example() {
 	return
 }
 //asq_end`,
-			expected: `(function_declaration name: (identifier) @name (#eq? @name "Example") body: (return_statement)) @x`,
+			expected: `(function_declaration name: (identifier) @name (#eq? @name "Example") body: (block (return_statement))) @x`,
 		},
 	}
 
