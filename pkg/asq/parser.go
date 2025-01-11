@@ -47,25 +47,45 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 	startOffset := fset.Position(startPos).Offset
 	endOffset := fset.Position(endPos).Offset
 	p := newPassOne(fset)
+	
 	if startOffset >= 0 && endOffset > startOffset && endOffset <= len(source) {
 		codeBlock := source[startOffset:endOffset]
-		hasWildcard = strings.Contains(codeBlock, "/***/")
-		if hasWildcard {
-			// Store the position of /***/ for processing
-			wildcardPos := strings.Index(codeBlock, "/***/") + startOffset
-			ast.Inspect(file, func(n ast.Node) bool {
-				if n == nil {
-					return true
+		
+		// Find all /***/ tags and create intervals
+		lines := strings.Split(codeBlock, "\n")
+		baseOffset := startOffset
+		
+		for lineNum, line := range lines {
+			pos := 0
+			for {
+				idx := strings.Index(line[pos:], "/***/")
+				if idx == -1 {
+					break
 				}
-				// Mark identifiers that appear right after /***/ as wildcards
-				if ident, ok := n.(*ast.Ident); ok {
-					identPos := fset.Position(ident.Pos()).Offset
-					if identPos > wildcardPos && identPos-wildcardPos <= 5 {
-						p.markWildcard(ident)
-					}
+				
+				// Calculate absolute position of this /***/ tag
+				tagStart := baseOffset + pos + idx
+				
+				// Find end of interval (next /***/ or end of line)
+				nextTagIdx := strings.Index(line[pos+idx+5:], "/***/")
+				intervalEnd := 0
+				if nextTagIdx == -1 {
+					// No more tags on this line, interval ends at end of line
+					intervalEnd = baseOffset + len(line)
+				} else {
+					// Interval ends at start of next tag
+					intervalEnd = tagStart + 5 + nextTagIdx
 				}
-				return true
-			})
+				
+				// Add the interval
+				p.addInterval(fset.Position(startPos).Line+lineNum, tagStart, intervalEnd)
+				
+				// Move position past this tag
+				pos += idx + 5
+			}
+			
+			// Move to next line
+			baseOffset += len(line) + 1 // +1 for newline
 		}
 	}
 
