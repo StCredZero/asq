@@ -6,9 +6,9 @@ import (
 )
 
 // convertToTreeSitterQuery converts a Go AST node to a tree-sitter query string
-func convertToTreeSitterQuery(node ast.Node, wildcardIdent map[*ast.Ident]bool) (string, error) {
+func convertToTreeSitterQuery(node ast.Node, p *passOne) (string, error) {
 	var sb strings.Builder
-	metaqNode := BuildAsqNode(node, wildcardIdent)
+	metaqNode := BuildAsqNode(node, p)
 	if err := metaqNode.WriteTreeSitterQuery(&sb); err != nil {
 		return "", err
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 // BuildAsqNode converts an ast.Node to its corresponding asq.Node
-func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
+func BuildAsqNode(node ast.Node, p *passOne) Node {
 	if node == nil {
 		return nil
 	}
@@ -18,9 +18,9 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	case *ast.CallExpr:
 		callExpr := &CallExpr{
 			Ast: astObj,
-			Fun: BuildAsqExpr(astObj.Fun, wildcardIdent),
+			Fun: BuildAsqExpr(astObj.Fun, p),
 			Args: slicex.Map(astObj.Args, func(arg ast.Expr) Expr {
-				return BuildAsqExpr(arg, wildcardIdent)
+				return BuildAsqExpr(arg, p)
 			}),
 		}
 		callExpr.exprNode()
@@ -60,7 +60,7 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	case *ast.ChanType:
 		return &ChanType{
 			Ast:   astObj,
-			Value: BuildAsqNode(astObj.Value, wildcardIdent),
+			Value: BuildAsqNode(astObj.Value, p),
 		}
 	case *ast.CompositeLit:
 		var elts []Expr
@@ -141,8 +141,8 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	case *ast.MapType:
 		return &MapType{
 			Ast:   astObj,
-			Key:   BuildAsqNode(astObj.Key, wildcardIdent),
-			Value: BuildAsqNode(astObj.Value, wildcardIdent),
+			Key:   BuildAsqNode(astObj.Key, p),
+			Value: BuildAsqNode(astObj.Value, p),
 		}
 	case *ast.StructType:
 		return &StructType{
@@ -212,7 +212,7 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 }
 
 // BuildAsqExpr converts an ast.Node to its corresponding asq.Node
-func BuildAsqExpr(node ast.Node, wildcardIdent map[*ast.Ident]bool) Expr {
+func BuildAsqExpr(node ast.Node, p *passOne) Expr {
 	if node == nil {
 		return nil
 	}
@@ -221,9 +221,9 @@ func BuildAsqExpr(node ast.Node, wildcardIdent map[*ast.Ident]bool) Expr {
 	case *ast.CallExpr:
 		return &CallExpr{
 			Ast: astObj,
-			Fun: BuildAsqExpr(astObj.Fun, wildcardIdent),
+			Fun: BuildAsqExpr(astObj.Fun, p),
 			Args: slicex.Map(astObj.Args, func(arg ast.Expr) Expr {
-				return BuildAsqExpr(arg, wildcardIdent)
+				return BuildAsqExpr(arg, p)
 			}),
 		}
 	case *ast.BinaryExpr:
