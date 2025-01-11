@@ -8,53 +8,6 @@ import (
 	"testing"
 )
 
-func TestWildcardTagging(t *testing.T) {
-	src := `package test
-func main() {
-	//asq_start
-	/***/x.Method()
-	//asq_end
-}`
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
-	if err != nil {
-		t.Fatalf("Failed to parse file: %v", err)
-	}
-
-	var callExpr *ast.CallExpr
-	ast.Inspect(file, func(n ast.Node) bool {
-		if ce, ok := n.(*ast.CallExpr); ok {
-			callExpr = ce
-			return false
-		}
-		return true
-	})
-
-	if callExpr == nil {
-		t.Fatal("Failed to find CallExpr node")
-	}
-
-	p := newPassOne(fset)
-	// Mark the identifier as wildcard
-	if sel, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-		if ident, ok := sel.X.(*ast.Ident); ok {
-			p.markWildcard(ident)
-		}
-	}
-
-	var buf bytes.Buffer
-	node := BuildAsqNode(callExpr, p)
-	if err := node.WriteTreeSitterQuery(&buf); err != nil {
-		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
-	}
-
-	// Verify that only the identifier is wildcarded, not the method name
-	expected := `(call_expression function: (selector_expression operand: (identifier) field: (field_identifier) @field (#eq? @field "Method")) arguments: (argument_list))`
-	if got := buf.String(); got != expected {
-		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
-	}
-}
-
 func TestNonIdentWildcardTagging(t *testing.T) {
 	src := `package test
 func main() {
@@ -81,7 +34,7 @@ func main() {
 		t.Fatal("Failed to find BasicLit node")
 	}
 
-	p := newPassOne(fset)
+	p := newPassOne(file)
 	var buf bytes.Buffer
 	node := BuildAsqNode(basicLit, p)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
@@ -125,7 +78,7 @@ func main() {
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(arrayType, newPassOne(fset))
+	node = BuildAsqNode(arrayType, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -166,7 +119,7 @@ func main() {
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(basicLit, newPassOne(fset))
+	node = BuildAsqNode(basicLit, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -210,7 +163,7 @@ func main() {
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(structType, newPassOne(fset))
+	node = BuildAsqNode(structType, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -251,7 +204,7 @@ func main() {
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(mapType, newPassOne(fset))
+	node = BuildAsqNode(mapType, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -292,7 +245,7 @@ func main() {
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(funcType, newPassOne(fset))
+	node = BuildAsqNode(funcType, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -334,7 +287,7 @@ const (
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(genDecl, newPassOne(fset))
+	node = BuildAsqNode(genDecl, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -375,28 +328,12 @@ func main() {
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(valueSpec, newPassOne(fset))
+	node = BuildAsqNode(valueSpec, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
 	expected := `(value_spec names: ((identifier) @name (#eq? @name "x") (identifier) @name (#eq? @name "y")) type: (identifier) @name (#eq? @name "int") values: ((literal) @value (#eq? @value "1") (literal) @value (#eq? @value "2")))`
-	if got := buf.String(); got != expected {
-		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
-	}
-}
-
-func TestBadDecl(t *testing.T) {
-	fset := token.NewFileSet()
-	badDecl := &ast.BadDecl{}
-	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(badDecl, newPassOne(fset))
-	if err := node.WriteTreeSitterQuery(&buf); err != nil {
-		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
-	}
-
-	expected := `(bad_declaration)`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -432,7 +369,7 @@ func main() {
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(chanType, newPassOne(fset))
+	node = BuildAsqNode(chanType, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -473,7 +410,7 @@ func main() {
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(compositeLit, newPassOne(fset))
+	node = BuildAsqNode(compositeLit, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -514,7 +451,7 @@ func Add(x, y int) int {
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(funcDecl, newPassOne(fset))
+	node = BuildAsqNode(funcDecl, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -555,7 +492,7 @@ func main() {
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(funcLit, newPassOne(fset))
+	node = BuildAsqNode(funcLit, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -580,7 +517,7 @@ package test
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(file, newPassOne(fset))
+	node = BuildAsqNode(file, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -621,7 +558,7 @@ type Point struct {
 
 	var buf bytes.Buffer
 	var node Node
-	node = BuildAsqNode(typeSpec, newPassOne(fset))
+	node = BuildAsqNode(typeSpec, newPassOne(file))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}

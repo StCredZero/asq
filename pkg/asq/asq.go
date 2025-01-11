@@ -5,8 +5,6 @@ import (
 	"io"
 )
 
-type Pos int
-
 // Node is the interface that all asq nodes implement.
 type Node interface {
 	WriteTreeSitterQuery(w io.Writer) error

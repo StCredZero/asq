@@ -3,38 +3,67 @@ package asq
 import (
 	"go/ast"
 	"go/token"
+	"strings"
 )
 
 // RangeInterval represents an active interval for a wildcard tag
 type RangeInterval struct {
-	Line  int // Line number where interval occurs
-	Start int // Start offset in the line
-	End   int // End offset in the line
-	Used  bool // Whether this interval has been used
+	Start    token.Pos // Start offset in the line
+	TokenEnd token.Pos // End offset in the line
+	End      token.Pos
 }
 
 // passOne is an internal struct used during the first pass of AST processing
 // to track which identifiers should be treated as wildcards based on active intervals.
 type passOne struct {
 	wildcardRanges []RangeInterval // Active intervals for wildcard tags
-	fset          *token.FileSet
 }
 
 // newPassOne creates a new passOne instance
-func newPassOne(fset *token.FileSet) *passOne {
-	return &passOne{
+func newPassOne(file *ast.File) *passOne {
+	passOneData := &passOne{
 		wildcardRanges: make([]RangeInterval, 0),
-		fset:          fset,
+	}
+
+	// Find the code block between comments
+	var collectingComments bool
+	var endPos token.Pos
+	for _, cg := range file.Comments {
+		for _, c := range cg.List {
+			if strings.TrimSpace(c.Text) == "//asq_start" {
+				collectingComments = true
+			} else if strings.TrimSpace(c.Text) == "//asq_end" {
+				endPos = c.Pos()
+				break
+			}
+			if collectingComments && c.Text == "/***/" {
+				passOneData.addInterval(cg.Pos(), cg.End())
+			}
+		}
+	}
+	// pad out the last interval to the //asq_end boundary
+	passOneData.setLastIntervalEnd(endPos)
+	return passOneData
+}
+
+// addInterval adds a new wildcard interval
+func (p *passOne) setLastIntervalEnd(start token.Pos) {
+	if len(p.wildcardRanges) > 0 {
+		lastInterval := p.wildcardRanges[len(p.wildcardRanges)-1]
+		lastInterval.End = start - 1
+		p.wildcardRanges[len(p.wildcardRanges)-1] = lastInterval
 	}
 }
 
 // addInterval adds a new wildcard interval
-func (p *passOne) addInterval(line, start, end int) {
+func (p *passOne) addInterval(start, end token.Pos) {
+	if len(p.wildcardRanges) > 0 {
+		p.setLastIntervalEnd(start - 1)
+	}
 	p.wildcardRanges = append(p.wildcardRanges, RangeInterval{
-		Line:  line,
-		Start: start,
-		End:   end,
-		Used:  false,
+		Start:    start,
+		End:      end,
+		TokenEnd: end,
 	})
 }
 
@@ -42,28 +71,21 @@ func (p *passOne) addInterval(line, start, end int) {
 // Currently only supports ast.Ident nodes and checks if the node is the first
 // syntactic entity in an active interval.
 func (p *passOne) isWildcard(node ast.Node) bool {
-	ident, ok := node.(*ast.Ident)
-	if !ok {
-		return false
-	}
-
-	pos := p.fset.Position(ident.Pos())
-	offset := pos.Offset
-	line := pos.Line
-
-	// Check if this identifier is the first syntactic entity in any active interval
-	for i, interval := range p.wildcardRanges {
-		if interval.Line == line && !interval.Used && offset >= interval.Start && offset < interval.End {
-			// Mark this interval as used since we found its first syntactic entity
-			p.wildcardRanges[i].Used = true
-			return true
+	for {
+		if len(p.wildcardRanges) == 0 {
+			return false
+		}
+		firstRange := p.wildcardRanges[0]
+		if firstRange.Start < node.Pos() && firstRange.End >= node.End() {
+			p.wildcardRanges = p.wildcardRanges[1:]
+			_, isIdent := node.(*ast.Ident)
+			return isIdent
+		} else if firstRange.End < node.Pos() {
+			p.wildcardRanges = p.wildcardRanges[1:]
+			continue
+		} else if firstRange.End > node.End() {
+			break
 		}
 	}
 	return false
-}
-
-// markWildcard is deprecated and will be removed.
-// Use addInterval instead to define wildcard ranges.
-func (p *passOne) markWildcard(ident *ast.Ident) {
-	// No-op - we now use intervals instead of direct marking
 }
