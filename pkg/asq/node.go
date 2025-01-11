@@ -289,7 +289,7 @@ func (s *SelectorExpr) WriteTreeSitterQuery(w io.Writer) error {
 	if err := s.X.WriteTreeSitterQuery(w); err != nil {
 		return err
 	}
-	_, err := fmt.Fprintf(w, ` field: (field_identifier) @field (#eq? @field "%s"))`, s.Ast.Sel.Name)
+	_, err := fmt.Fprintf(w, ` field: (field_identifier) (#eq? _ "%s"))`, s.Ast.Sel.Name)
 	return err
 }
 
@@ -310,7 +310,7 @@ func (i *Ident) WriteTreeSitterQuery(w io.Writer) error {
 		_, err := w.Write([]byte("(identifier)"))
 		return err
 	}
-	_, err := fmt.Fprintf(w, `(identifier) @name (#eq? @name "%s")`, i.Ast.Name)
+	_, err := fmt.Fprintf(w, `(identifier) (#eq? _ "%s")`, i.Ast.Name)
 	return err
 }
 
@@ -385,7 +385,7 @@ type BasicLit struct {
 func (b *BasicLit) exprNode() {}
 
 func (b *BasicLit) WriteTreeSitterQuery(w io.Writer) error {
-	_, err := fmt.Fprintf(w, `(literal) @value (#eq? @value "%s")`, b.Ast.Value)
+	_, err := fmt.Fprintf(w, `(literal) (#eq? _ "%s")`, b.Ast.Value)
 	return err
 }
 
@@ -704,7 +704,7 @@ func (p *Package) WriteTreeSitterQuery(w io.Writer) error {
 	if _, err := w.Write([]byte("(source_file package_name: ")); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, `(identifier) @name (#eq? @name "%s")`, p.Name.Ast.Name); err != nil {
+	if _, err := fmt.Fprintf(w, `(identifier) (#eq? _ "%s")`, p.Name.Ast.Name); err != nil {
 		return err
 	}
 	_, err := w.Write([]byte(")"))
@@ -1581,7 +1581,7 @@ func (r *ReturnStmt) WriteTreeSitterQuery(w io.Writer) error {
 				return err
 			}
 			if ident, ok := result.(*Ident); ok {
-				if _, err := fmt.Fprintf(w, `(identifier) @value (#eq? @value "%s")`, ident.Ast.Name); err != nil {
+				if _, err := fmt.Fprintf(w, `(identifier) (#eq? _ "%s")`, ident.Ast.Name); err != nil {
 					return err
 				}
 			} else {
