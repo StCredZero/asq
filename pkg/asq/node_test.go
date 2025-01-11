@@ -1,4 +1,4 @@
-package metaq
+package asq
 
 import (
 	"bytes"

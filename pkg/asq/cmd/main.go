@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/StCredZero/asq/pkg/metaq"
+	"github.com/StCredZero/asq/pkg/asq"
 )
 
 func main() {
@@ -16,7 +16,7 @@ func main() {
 	}
 
 	filePath := flag.Arg(0)
-	query, err := metaq.ExtractTreeSitterQuery(filePath)
+	query, err := asq.ExtractTreeSitterQuery(filePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
