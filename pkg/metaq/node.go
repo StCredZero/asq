@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/StCredZero/asq/pkg/slicex"
 	"go/ast"
+	"go/token"
 	"io"
 )
 
@@ -62,12 +63,18 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 			Value: BuildAsqNode(astObj.Value, wildcardIdent),
 		}
 	case *ast.CompositeLit:
+		var elts []Expr
+		for _, elt := range astObj.Elts {
+			if basicLit, ok := elt.(*ast.BasicLit); ok {
+				elts = append(elts, &BasicLit{Ast: basicLit})
+			} else {
+				elts = append(elts, BuildAsqExpr(elt, wildcardIdent))
+			}
+		}
 		return &CompositeLit{
 			Ast:  astObj,
 			Type: BuildAsqNode(astObj.Type, wildcardIdent),
-			Elts: slicex.Map(astObj.Elts, func(elt ast.Expr) Expr {
-				return BuildAsqExpr(elt, wildcardIdent)
-			}),
+			Elts: elts,
 		}
 	case *ast.Field:
 		var names []*Ident
@@ -95,11 +102,18 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 			}(),
 		}
 	case *ast.FieldList:
+		var fields []*Field
+		if astObj.List != nil {
+			fields = slicex.Map(astObj.List, func(field *ast.Field) *Field {
+				if node := BuildAsqNode(field, wildcardIdent); node != nil {
+					return node.(*Field)
+				}
+				return nil
+			})
+		}
 		return &FieldList{
-			Ast: astObj,
-			List: slicex.Map(astObj.List, func(field *ast.Field) *Field {
-				return BuildAsqNode(field, wildcardIdent).(*Field)
-			}),
+			Ast:  astObj,
+			List: fields,
 		}
 	case *ast.FuncLit:
 		return &FuncLit{
@@ -108,10 +122,21 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 			Body: BuildAsqNode(astObj.Body, wildcardIdent),
 		}
 	case *ast.FuncType:
+		var params, results *FieldList
+		if astObj.Params != nil {
+			if node := BuildAsqNode(astObj.Params, wildcardIdent); node != nil {
+				params = node.(*FieldList)
+			}
+		}
+		if astObj.Results != nil {
+			if node := BuildAsqNode(astObj.Results, wildcardIdent); node != nil {
+				results = node.(*FieldList)
+			}
+		}
 		return &FuncType{
 			Ast:     astObj,
-			Params:  BuildAsqNode(astObj.Params, wildcardIdent).(*FieldList),
-			Results: BuildAsqNode(astObj.Results, wildcardIdent).(*FieldList),
+			Params:  params,
+			Results: results,
 		}
 	case *ast.MapType:
 		return &MapType{
@@ -147,11 +172,35 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 			Type:   BuildAsqNode(astObj.Type, wildcardIdent),
 			Values: values,
 		}
+	case *ast.File:
+		if astObj.Name == nil {
+			return nil
+		}
+		return &Package{
+			Ast:   &ast.Package{Name: astObj.Name.Name},
+			Name:  BuildAsqNode(astObj.Name, wildcardIdent).(*Ident),
+			Files: make(map[string]Node),
+		}
 	case *ast.FuncDecl:
+		var name *Ident
+		if astObj.Name != nil {
+			name = BuildAsqExpr(astObj.Name, wildcardIdent).(*Ident)
+		}
+		var funcType *FuncType
+		if astObj.Type != nil {
+			if typeNode := BuildAsqNode(astObj.Type, wildcardIdent); typeNode != nil {
+				funcType = typeNode.(*FuncType)
+			}
+		}
+		var body Node
+		if astObj.Body != nil && len(astObj.Body.List) == 1 {
+			body = BuildAsqStmt(astObj.Body.List[0], wildcardIdent)
+		}
 		return &FuncDecl{
 			Ast:  astObj,
-			Name: BuildAsqExpr(astObj.Name, wildcardIdent).(*Ident),
-			Type: BuildAsqNode(astObj.Type, wildcardIdent).(*FuncType),
+			Name: name,
+			Type: funcType,
+			Body: body,
 		}
 	case ast.Stmt:
 		return BuildAsqStmt(astObj, wildcardIdent)
@@ -176,6 +225,13 @@ func BuildAsqExpr(node ast.Node, wildcardIdent map[*ast.Ident]bool) Expr {
 			Args: slicex.Map(astObj.Args, func(arg ast.Expr) Expr {
 				return BuildAsqExpr(arg, wildcardIdent)
 			}),
+		}
+	case *ast.BinaryExpr:
+		return &BinaryExpr{
+			Ast: astObj,
+			X:   BuildAsqExpr(astObj.X, wildcardIdent),
+			Op:  astObj.Op,
+			Y:   BuildAsqExpr(astObj.Y, wildcardIdent),
 		}
 	case *ast.SelectorExpr:
 		return &SelectorExpr{
@@ -396,14 +452,8 @@ func (c *CompositeLit) WriteTreeSitterQuery(w io.Writer) error {
                     return err
                 }
             }
-            if basicLit, ok := elt.(*BasicLit); ok {
-                if err := basicLit.WriteTreeSitterQuery(w); err != nil {
-                    return err
-                }
-            } else {
-                if err := elt.WriteTreeSitterQuery(w); err != nil {
-                    return err
-                }
+            if err := elt.WriteTreeSitterQuery(w); err != nil {
+                return err
             }
         }
         if _, err := w.Write([]byte(")")); err != nil {
@@ -654,7 +704,7 @@ func (p *Package) WriteTreeSitterQuery(w io.Writer) error {
     if _, err := w.Write([]byte("(source_file package_name: ")); err != nil {
         return err
     }
-    if _, err := fmt.Fprintf(w, `(identifier) @name (#eq? @name "test")`); err != nil {
+    if _, err := fmt.Fprintf(w, `(identifier) @name (#eq? @name "%s")`, p.Name.Ast.Name); err != nil {
         return err
     }
     _, err := w.Write([]byte(")"))
@@ -801,6 +851,7 @@ type FuncDecl struct {
     Ast  *ast.FuncDecl
     Name *Ident
     Type *FuncType
+    Body Node
 }
 
 func (f *FuncDecl) declNode() {}
@@ -817,20 +868,54 @@ func (f *FuncDecl) WriteTreeSitterQuery(w io.Writer) error {
             return err
         }
     }
-    if f.Type != nil {
-        if f.Type.Params != nil {
-            if _, err := w.Write([]byte(" parameters: ")); err != nil {
-                return err
-            }
-            if err := f.Type.Params.WriteTreeSitterQuery(w); err != nil {
-                return err
-            }
+    if f.Type != nil && f.Type.Params != nil && len(f.Type.Params.List) > 0 {
+        if _, err := w.Write([]byte(" parameters: ")); err != nil {
+            return err
         }
-        if f.Type.Results != nil {
-            if _, err := w.Write([]byte(" results: ")); err != nil {
+        if err := f.Type.Params.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    if f.Type != nil && f.Type.Results != nil && len(f.Type.Results.List) > 0 {
+        if _, err := w.Write([]byte(" results: ")); err != nil {
+            return err
+        }
+        if err := f.Type.Results.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    if f.Body != nil {
+        if _, err := w.Write([]byte(" body: ")); err != nil {
+            return err
+        }
+        // Check if body is a BlockStmt with a single ReturnStmt
+        if blockStmt, ok := f.Body.(*BlockStmt); ok && len(blockStmt.List) == 1 {
+            if returnStmt, ok := blockStmt.List[0].(*ReturnStmt); ok {
+                // Write the ReturnStmt directly without block_statement wrapper
+                if err := returnStmt.WriteTreeSitterQuery(w); err != nil {
+                    return err
+                }
+            } else {
+                // For all other single statements, wrap in block_statement
+                if _, err := w.Write([]byte("(block_statement ")); err != nil {
+                    return err
+                }
+                if err := f.Body.WriteTreeSitterQuery(w); err != nil {
+                    return err
+                }
+                if _, err := w.Write([]byte(")")); err != nil {
+                    return err
+                }
+            }
+        } else {
+            // Not a BlockStmt or has multiple statements
+            if _, err := w.Write([]byte("(block_statement ")); err != nil {
                 return err
             }
-            if err := f.Type.Results.WriteTreeSitterQuery(w); err != nil {
+            if err := f.Body.WriteTreeSitterQuery(w); err != nil {
+                return err
+            }
+            if _, err := w.Write([]byte(")")); err != nil {
                 return err
             }
         }
@@ -858,6 +943,36 @@ func (d *DefaultNode) AstNode() ast.Node {
 }
 
 // DefaultExpr wraps any ast.Expr type that doesn't have a specific implementation
+type BinaryExpr struct {
+	Ast *ast.BinaryExpr
+	X   Expr
+	Op  token.Token
+	Y   Expr
+}
+
+func (b *BinaryExpr) exprNode() {}
+
+func (b *BinaryExpr) WriteTreeSitterQuery(w io.Writer) error {
+	if _, err := w.Write([]byte("(binary_expression left: ")); err != nil {
+		return err
+	}
+	if err := b.X.WriteTreeSitterQuery(w); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(fmt.Sprintf(` operator: "%s" right: `, b.Op.String()))); err != nil {
+		return err
+	}
+	if err := b.Y.WriteTreeSitterQuery(w); err != nil {
+		return err
+	}
+	_, err := w.Write([]byte(")"))
+	return err
+}
+
+func (b *BinaryExpr) AstNode() ast.Node {
+	return b.Ast
+}
+
 type DefaultExpr struct {
 	Node ast.Node
 }
@@ -977,7 +1092,7 @@ type BlockStmt struct {
 func (b *BlockStmt) stmtNode() {}
 
 func (b *BlockStmt) WriteTreeSitterQuery(w io.Writer) error {
-	if _, err := w.Write([]byte("(block")); err != nil {
+	if _, err := w.Write([]byte("(block_statement")); err != nil {
 		return err
 	}
 	for _, stmt := range b.List {
@@ -1487,51 +1602,7 @@ func (r *ReturnStmt) AstNode() ast.Node {
 	return r.Ast
 }
 
-// FuncDecl wraps an ast.FuncDecl node
-type FuncDecl struct {
-	Ast  *ast.FuncDecl
-	Name *Ident
-	Body Node
-}
-
-func (f *FuncDecl) declNode() {}
-
-func (f *FuncDecl) WriteTreeSitterQuery(w io.Writer) error {
-	if _, err := w.Write([]byte("(function_declaration")); err != nil {
-		return err
-	}
-	if f.Name != nil {
-		if _, err := w.Write([]byte(" name: ")); err != nil {
-			return err
-		}
-		if err := f.Name.WriteTreeSitterQuery(w); err != nil {
-			return err
-		}
-	}
-	if f.Body != nil {
-		if block, ok := f.Body.(*BlockStmt); ok && len(block.List) == 1 {
-			if _, err := w.Write([]byte(" body: ")); err != nil {
-				return err
-			}
-			if err := block.List[0].WriteTreeSitterQuery(w); err != nil {
-				return err
-			}
-		} else {
-			if _, err := w.Write([]byte(" body: ")); err != nil {
-				return err
-			}
-			if err := f.Body.WriteTreeSitterQuery(w); err != nil {
-				return err
-			}
-		}
-	}
-	_, err := w.Write([]byte(")"))
-	return err
-}
-
-func (f *FuncDecl) AstNode() ast.Node {
-	return f.Ast
-}
+// Removed duplicate FuncDecl implementation
 
 // BuildAsqStmt converts an ast.Stmt to its corresponding metaq.Stmt
 func BuildAsqStmt(stmt ast.Stmt, wildcardIdent map[*ast.Ident]bool) Stmt {
@@ -1670,12 +1741,30 @@ func BuildAsqDecl(decl ast.Decl, wildcardIdent map[*ast.Ident]bool) Decl {
 	case *ast.FuncDecl:
 		var name *Ident
 		if d.Name != nil {
-			name = &Ident{Ast: d.Name}
+			if expr := BuildAsqExpr(d.Name, wildcardIdent); expr != nil {
+				name = expr.(*Ident)
+			}
+		}
+		var funcType *FuncType
+		if d.Type != nil && (d.Type.Params != nil && len(d.Type.Params.List) > 0 || d.Type.Results != nil && len(d.Type.Results.List) > 0) {
+			if typeNode := BuildAsqNode(d.Type, wildcardIdent); typeNode != nil {
+				funcType = typeNode.(*FuncType)
+			}
+		}
+		var body Node
+		if d.Body != nil {
+			body = BuildAsqNode(d.Body, wildcardIdent)
+			if blockStmt, ok := body.(*BlockStmt); ok && len(blockStmt.Ast.List) == 1 {
+				if ret, ok := blockStmt.Ast.List[0].(*ast.ReturnStmt); ok {
+					body = &ReturnStmt{Ast: ret}
+				}
+			}
 		}
 		return &FuncDecl{
 			Ast:  d,
 			Name: name,
-			Body: BuildAsqNode(d.Body, wildcardIdent),
+			Type: funcType,
+			Body: body,
 		}
 	case *ast.GenDecl:
 		return &GenDecl{

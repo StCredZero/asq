@@ -400,7 +400,7 @@ func Add(x, y int) int {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(function_declaration name: (identifier) @name (#eq? @name "Add") parameters: (field_list (field_declaration names: ((identifier) @name (#eq? @name "x") (identifier) @name (#eq? @name "y")) type: (identifier) @name (#eq? @name "int"))) results: (field_list (field_declaration type: (identifier) @name (#eq? @name "int"))))`
+	expected := `(function_declaration name: (identifier) @name (#eq? @name "Add") parameters: (field_list (field_declaration names: ((identifier) @name (#eq? @name "x") (identifier) @name (#eq? @name "y")) type: (identifier) @name (#eq? @name "int"))) results: (field_list (field_declaration type: (identifier) @name (#eq? @name "int"))) body: (block_statement (return_statement values: (expression_list (binary_expression left: (identifier) @name (#eq? @name "x") operator: "+" right: (identifier) @name (#eq? @name "y"))))))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
