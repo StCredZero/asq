@@ -1,4 +1,4 @@
-package metaq
+package asq
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"io"
 )
 
-// BuildAsqNode converts an ast.Node to its corresponding metaq.Node
+// BuildAsqNode converts an ast.Node to its corresponding asq.Node
 func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	if node == nil {
 		return nil
@@ -211,7 +211,7 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	}
 }
 
-// BuildAsqExpr converts an ast.Node to its corresponding metaq.Node
+// BuildAsqExpr converts an ast.Node to its corresponding asq.Node
 func BuildAsqExpr(node ast.Node, wildcardIdent map[*ast.Ident]bool) Expr {
 	if node == nil {
 		return nil
@@ -1604,7 +1604,7 @@ func (r *ReturnStmt) AstNode() ast.Node {
 
 // Removed duplicate FuncDecl implementation
 
-// BuildAsqStmt converts an ast.Stmt to its corresponding metaq.Stmt
+// BuildAsqStmt converts an ast.Stmt to its corresponding asq.Stmt
 func BuildAsqStmt(stmt ast.Stmt, wildcardIdent map[*ast.Ident]bool) Stmt {
 	if stmt == nil {
 		return nil
@@ -1729,7 +1729,7 @@ func BuildAsqStmt(stmt ast.Stmt, wildcardIdent map[*ast.Ident]bool) Stmt {
 	}
 }
 
-// BuildAsqDecl converts an ast.Decl to its corresponding metaq.Decl
+// BuildAsqDecl converts an ast.Decl to its corresponding asq.Decl
 func BuildAsqDecl(decl ast.Decl, wildcardIdent map[*ast.Ident]bool) Decl {
 	if decl == nil {
 		return nil

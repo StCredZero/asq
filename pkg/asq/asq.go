@@ -1,4 +1,4 @@
-package metaq
+package asq
 
 import (
 	"go/ast"
@@ -7,7 +7,7 @@ import (
 
 type Pos int
 
-// Node is the interface that all metaq nodes implement.
+// Node is the interface that all asq nodes implement.
 type Node interface {
 	WriteTreeSitterQuery(w io.Writer) error
 	AstNode() ast.Node

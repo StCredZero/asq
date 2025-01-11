@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StCredZero/asq/pkg/metaq"
+	"github.com/StCredZero/asq/pkg/asq"
 )
 
 func TestMetaqQuery(t *testing.T) {
@@ -106,7 +106,7 @@ func Example() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temporary directory
-			tmpDir, err := os.MkdirTemp("", "metaq-test-*")
+			tmpDir, err := os.MkdirTemp("", "asq-test-*")
 			if err != nil {
 				t.Fatalf("Failed to create temp directory: %v", err)
 			}
@@ -119,8 +119,8 @@ func Example() {
 				t.Fatalf("Failed to write test file: %v", err)
 			}
 
-			// Run metaq
-			query, err := metaq.ExtractTreeSitterQuery(testFile)
+			// Run asq
+			query, err := asq.ExtractTreeSitterQuery(testFile)
 			if err != nil {
 				t.Fatalf("Failed to extract query: %v", err)
 			}
