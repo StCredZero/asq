@@ -38,6 +38,66 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 		}
 		ident.exprNode()
 		return ident
+	case *ast.ArrayType:
+		return &ArrayType{
+			Ast: astObj,
+			Len: BuildAsqExpr(astObj.Len, wildcardIdent),
+			Elt: BuildAsqNode(astObj.Elt, wildcardIdent),
+		}
+	case *ast.BasicLit:
+		return &BasicLit{Ast: astObj}
+	case *ast.ChanType:
+		return &ChanType{
+			Ast:   astObj,
+			Value: BuildAsqNode(astObj.Value, wildcardIdent),
+		}
+	case *ast.CompositeLit:
+		return &CompositeLit{
+			Ast:  astObj,
+			Type: BuildAsqNode(astObj.Type, wildcardIdent),
+			Elts: slicex.Map(astObj.Elts, func(elt ast.Expr) Expr {
+				return BuildAsqExpr(elt, wildcardIdent)
+			}),
+		}
+	case *ast.Field:
+		return &Field{
+			Ast: astObj,
+			Names: slicex.Map(astObj.Names, func(name *ast.Ident) *Ident {
+				return BuildAsqExpr(name, wildcardIdent).(*Ident)
+			}),
+			Type: BuildAsqNode(astObj.Type, wildcardIdent),
+			Tag:  BuildAsqExpr(astObj.Tag, wildcardIdent).(*BasicLit),
+		}
+	case *ast.FieldList:
+		return &FieldList{
+			Ast: astObj,
+			List: slicex.Map(astObj.List, func(field *ast.Field) *Field {
+				return BuildAsqNode(field, wildcardIdent).(*Field)
+			}),
+		}
+	case *ast.FuncLit:
+		return &FuncLit{
+			Ast:  astObj,
+			Type: BuildAsqNode(astObj.Type, wildcardIdent).(*FuncType),
+			Body: BuildAsqNode(astObj.Body, wildcardIdent),
+		}
+	case *ast.FuncType:
+		return &FuncType{
+			Ast:     astObj,
+			Params:  BuildAsqNode(astObj.Params, wildcardIdent).(*FieldList),
+			Results: BuildAsqNode(astObj.Results, wildcardIdent).(*FieldList),
+		}
+	case *ast.MapType:
+		return &MapType{
+			Ast:   astObj,
+			Key:   BuildAsqNode(astObj.Key, wildcardIdent),
+			Value: BuildAsqNode(astObj.Value, wildcardIdent),
+		}
+	case *ast.StructType:
+		return &StructType{
+			Ast:    astObj,
+			Fields: BuildAsqNode(astObj.Fields, wildcardIdent).(*FieldList),
+		}
 	case ast.Stmt:
 		return BuildAsqStmt(astObj, wildcardIdent)
 	case ast.Decl:
@@ -147,59 +207,532 @@ func (i *Ident) AstNode() ast.Node {
 	return i.Ast
 }
 
-// The following ast.Node types have not been fully implemented yet:
-/*
-- *ast.ArrayType
-- *ast.AssignStmt
-- *ast.BadDecl
-- *ast.BadExpr
-- *ast.BadStmt
-- *ast.BasicLit
-- *ast.BinaryExpr
-- *ast.BlockStmt
-- *ast.BranchStmt
-- *ast.CaseClause
-- *ast.ChanType
-- *ast.CommClause
-- *ast.CompositeLit
-- *ast.DeclStmt
-- *ast.DeferStmt
-- *ast.Ellipsis
-- *ast.EmptyStmt
-- *ast.ExprStmt
-- *ast.Field
-- *ast.FieldList
-- *ast.File
-- *ast.ForStmt
-- *ast.FuncDecl
-- *ast.FuncLit
-- *ast.FuncType
-- *ast.GenDecl
-- *ast.GoStmt
-- *ast.IfStmt
-- *ast.ImportSpec
-- *ast.IncDecStmt
-- *ast.IndexExpr
-- *ast.InterfaceType
-- *ast.KeyValueExpr
-- *ast.LabeledStmt
-- *ast.MapType
-- *ast.Package
-- *ast.ParenExpr
-- *ast.RangeStmt
-- *ast.ReturnStmt
-- *ast.SelectStmt
-- *ast.SendStmt
-- *ast.SliceExpr
-- *ast.StarExpr
-- *ast.StructType
-- *ast.SwitchStmt
-- *ast.TypeAssertExpr
-- *ast.TypeSpec
-- *ast.TypeSwitchStmt
-- *ast.UnaryExpr
-- *ast.ValueSpec
-*/
+// ArrayType wraps an ast.ArrayType node
+type ArrayType struct {
+    Ast   *ast.ArrayType
+    Len   Expr
+    Elt   Node
+}
+
+func (a *ArrayType) exprNode() {}
+
+func (a *ArrayType) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(array_type")); err != nil {
+        return err
+    }
+    if a.Len != nil {
+        if _, err := w.Write([]byte(" length: ")); err != nil {
+            return err
+        }
+        if err := a.Len.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    if a.Elt != nil {
+        if _, err := w.Write([]byte(" element: ")); err != nil {
+            return err
+        }
+        if err := a.Elt.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (a *ArrayType) AstNode() ast.Node {
+    return a.Ast
+}
+
+// BadDecl wraps an ast.BadDecl node
+type BadDecl struct {
+    Ast *ast.BadDecl
+}
+
+func (b *BadDecl) declNode() {}
+
+func (b *BadDecl) WriteTreeSitterQuery(w io.Writer) error {
+    _, err := w.Write([]byte("(bad_declaration)"))
+    return err
+}
+
+func (b *BadDecl) AstNode() ast.Node {
+    return b.Ast
+}
+
+// BasicLit wraps an ast.BasicLit node
+type BasicLit struct {
+    Ast *ast.BasicLit
+}
+
+func (b *BasicLit) exprNode() {}
+
+func (b *BasicLit) WriteTreeSitterQuery(w io.Writer) error {
+    _, err := fmt.Fprintf(w, `(literal) @value (#eq? @value "%s")`, b.Ast.Value)
+    return err
+}
+
+func (b *BasicLit) AstNode() ast.Node {
+    return b.Ast
+}
+
+// ChanType wraps an ast.ChanType node
+type ChanType struct {
+    Ast    *ast.ChanType
+    Value  Node
+}
+
+func (c *ChanType) exprNode() {}
+
+func (c *ChanType) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(channel_type")); err != nil {
+        return err
+    }
+    if c.Value != nil {
+        if _, err := w.Write([]byte(" value: ")); err != nil {
+            return err
+        }
+        if err := c.Value.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (c *ChanType) AstNode() ast.Node {
+    return c.Ast
+}
+
+// CompositeLit wraps an ast.CompositeLit node
+type CompositeLit struct {
+    Ast   *ast.CompositeLit
+    Type  Node
+    Elts  []Expr
+}
+
+func (c *CompositeLit) exprNode() {}
+
+func (c *CompositeLit) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(composite_literal")); err != nil {
+        return err
+    }
+    if c.Type != nil {
+        if _, err := w.Write([]byte(" type: ")); err != nil {
+            return err
+        }
+        if err := c.Type.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    if len(c.Elts) > 0 {
+        if _, err := w.Write([]byte(" elements: (")); err != nil {
+            return err
+        }
+        for i, elt := range c.Elts {
+            if i > 0 {
+                if _, err := w.Write([]byte(" ")); err != nil {
+                    return err
+                }
+            }
+            if err := elt.WriteTreeSitterQuery(w); err != nil {
+                return err
+            }
+        }
+        if _, err := w.Write([]byte(")")); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (c *CompositeLit) AstNode() ast.Node {
+    return c.Ast
+}
+
+// Field wraps an ast.Field node
+type Field struct {
+    Ast     *ast.Field
+    Names   []*Ident
+    Type    Node
+    Tag     *BasicLit
+}
+
+func (f *Field) declNode() {}
+
+func (f *Field) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(field_declaration")); err != nil {
+        return err
+    }
+    if len(f.Names) > 0 {
+        if _, err := w.Write([]byte(" names: (")); err != nil {
+            return err
+        }
+        for i, name := range f.Names {
+            if i > 0 {
+                if _, err := w.Write([]byte(" ")); err != nil {
+                    return err
+                }
+            }
+            if err := name.WriteTreeSitterQuery(w); err != nil {
+                return err
+            }
+        }
+        if _, err := w.Write([]byte(")")); err != nil {
+            return err
+        }
+    }
+    if f.Type != nil {
+        if _, err := w.Write([]byte(" type: ")); err != nil {
+            return err
+        }
+        if err := f.Type.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    if f.Tag != nil {
+        if _, err := w.Write([]byte(" tag: ")); err != nil {
+            return err
+        }
+        if err := f.Tag.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (f *Field) AstNode() ast.Node {
+    return f.Ast
+}
+
+// FieldList wraps an ast.FieldList node
+type FieldList struct {
+    Ast   *ast.FieldList
+    List  []*Field
+}
+
+func (f *FieldList) declNode() {}
+
+func (f *FieldList) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(field_list")); err != nil {
+        return err
+    }
+    for _, field := range f.List {
+        if _, err := w.Write([]byte(" ")); err != nil {
+            return err
+        }
+        if err := field.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (f *FieldList) AstNode() ast.Node {
+    return f.Ast
+}
+
+// FuncLit wraps an ast.FuncLit node
+type FuncLit struct {
+    Ast  *ast.FuncLit
+    Type *FuncType
+    Body Node
+}
+
+func (f *FuncLit) exprNode() {}
+
+func (f *FuncLit) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(function_literal")); err != nil {
+        return err
+    }
+    if f.Type != nil {
+        if _, err := w.Write([]byte(" type: ")); err != nil {
+            return err
+        }
+        if err := f.Type.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    if f.Body != nil {
+        if _, err := w.Write([]byte(" body: ")); err != nil {
+            return err
+        }
+        if err := f.Body.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (f *FuncLit) AstNode() ast.Node {
+    return f.Ast
+}
+
+// FuncType wraps an ast.FuncType node
+type FuncType struct {
+    Ast      *ast.FuncType
+    Params   *FieldList
+    Results  *FieldList
+}
+
+func (f *FuncType) exprNode() {}
+
+func (f *FuncType) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(function_type")); err != nil {
+        return err
+    }
+    if f.Params != nil {
+        if _, err := w.Write([]byte(" parameters: ")); err != nil {
+            return err
+        }
+        if err := f.Params.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    if f.Results != nil {
+        if _, err := w.Write([]byte(" results: ")); err != nil {
+            return err
+        }
+        if err := f.Results.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (f *FuncType) AstNode() ast.Node {
+    return f.Ast
+}
+
+// GenDecl wraps an ast.GenDecl node
+type GenDecl struct {
+    Ast   *ast.GenDecl
+    Specs []Node
+}
+
+func (g *GenDecl) declNode() {}
+
+func (g *GenDecl) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(generic_declaration")); err != nil {
+        return err
+    }
+    for _, spec := range g.Specs {
+        if _, err := w.Write([]byte(" ")); err != nil {
+            return err
+        }
+        if err := spec.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (g *GenDecl) AstNode() ast.Node {
+    return g.Ast
+}
+
+// MapType wraps an ast.MapType node
+type MapType struct {
+    Ast   *ast.MapType
+    Key   Node
+    Value Node
+}
+
+func (m *MapType) exprNode() {}
+
+func (m *MapType) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(map_type")); err != nil {
+        return err
+    }
+    if m.Key != nil {
+        if _, err := w.Write([]byte(" key: ")); err != nil {
+            return err
+        }
+        if err := m.Key.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    if m.Value != nil {
+        if _, err := w.Write([]byte(" value: ")); err != nil {
+            return err
+        }
+        if err := m.Value.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (m *MapType) AstNode() ast.Node {
+    return m.Ast
+}
+
+// Package wraps an ast.Package node
+type Package struct {
+    Ast   *ast.Package
+    Name  *Ident
+    Files map[string]Node
+}
+
+func (p *Package) declNode() {}
+
+func (p *Package) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(package")); err != nil {
+        return err
+    }
+    if p.Name != nil {
+        if _, err := w.Write([]byte(" name: ")); err != nil {
+            return err
+        }
+        if err := p.Name.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (p *Package) AstNode() ast.Node {
+    return p.Ast
+}
+
+// StructType wraps an ast.StructType node
+type StructType struct {
+    Ast    *ast.StructType
+    Fields *FieldList
+}
+
+func (s *StructType) exprNode() {}
+
+func (s *StructType) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(struct_type")); err != nil {
+        return err
+    }
+    if s.Fields != nil {
+        if _, err := w.Write([]byte(" fields: ")); err != nil {
+            return err
+        }
+        if err := s.Fields.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (s *StructType) AstNode() ast.Node {
+    return s.Ast
+}
+
+// TypeSpec wraps an ast.TypeSpec node
+type TypeSpec struct {
+    Ast   *ast.TypeSpec
+    Name  *Ident
+    Type  Node
+}
+
+func (t *TypeSpec) declNode() {}
+
+func (t *TypeSpec) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(type_spec")); err != nil {
+        return err
+    }
+    if t.Name != nil {
+        if _, err := w.Write([]byte(" name: ")); err != nil {
+            return err
+        }
+        if err := t.Name.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    if t.Type != nil {
+        if _, err := w.Write([]byte(" type: ")); err != nil {
+            return err
+        }
+        if err := t.Type.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (t *TypeSpec) AstNode() ast.Node {
+    return t.Ast
+}
+
+// ValueSpec wraps an ast.ValueSpec node
+type ValueSpec struct {
+    Ast    *ast.ValueSpec
+    Names  []*Ident
+    Type   Node
+    Values []Expr
+}
+
+func (v *ValueSpec) declNode() {}
+
+func (v *ValueSpec) WriteTreeSitterQuery(w io.Writer) error {
+    if _, err := w.Write([]byte("(value_spec")); err != nil {
+        return err
+    }
+    if len(v.Names) > 0 {
+        if _, err := w.Write([]byte(" names: (")); err != nil {
+            return err
+        }
+        for i, name := range v.Names {
+            if i > 0 {
+                if _, err := w.Write([]byte(" ")); err != nil {
+                    return err
+                }
+            }
+            if err := name.WriteTreeSitterQuery(w); err != nil {
+                return err
+            }
+        }
+        if _, err := w.Write([]byte(")")); err != nil {
+            return err
+        }
+    }
+    if v.Type != nil {
+        if _, err := w.Write([]byte(" type: ")); err != nil {
+            return err
+        }
+        if err := v.Type.WriteTreeSitterQuery(w); err != nil {
+            return err
+        }
+    }
+    if len(v.Values) > 0 {
+        if _, err := w.Write([]byte(" values: (")); err != nil {
+            return err
+        }
+        for i, value := range v.Values {
+            if i > 0 {
+                if _, err := w.Write([]byte(" ")); err != nil {
+                    return err
+                }
+            }
+            if err := value.WriteTreeSitterQuery(w); err != nil {
+                return err
+            }
+        }
+        if _, err := w.Write([]byte(")")); err != nil {
+            return err
+        }
+    }
+    _, err := w.Write([]byte(")"))
+    return err
+}
+
+func (v *ValueSpec) AstNode() ast.Node {
+    return v.Ast
+}
 
 // DefaultNode wraps any ast.Node type that doesn't have a specific implementation
 type DefaultNode struct {
@@ -1023,6 +1556,8 @@ func BuildAsqDecl(decl ast.Decl, wildcardIdent map[*ast.Ident]bool) Decl {
 	}
 
 	switch d := decl.(type) {
+	case *ast.BadDecl:
+		return &BadDecl{Ast: d}
 	case *ast.FuncDecl:
 		var name *Ident
 		if d.Name != nil {
@@ -1032,6 +1567,30 @@ func BuildAsqDecl(decl ast.Decl, wildcardIdent map[*ast.Ident]bool) Decl {
 			Ast:  d,
 			Name: name,
 			Body: BuildAsqNode(d.Body, wildcardIdent),
+		}
+	case *ast.GenDecl:
+		return &GenDecl{
+			Ast: d,
+			Specs: slicex.Map(d.Specs, func(spec ast.Spec) Node {
+				return BuildAsqNode(spec, wildcardIdent)
+			}),
+		}
+	case *ast.TypeSpec:
+		return &TypeSpec{
+			Ast:  d,
+			Name: BuildAsqExpr(d.Name, wildcardIdent).(*Ident),
+			Type: BuildAsqNode(d.Type, wildcardIdent),
+		}
+	case *ast.ValueSpec:
+		return &ValueSpec{
+			Ast: d,
+			Names: slicex.Map(d.Names, func(name *ast.Ident) *Ident {
+				return BuildAsqExpr(name, wildcardIdent).(*Ident)
+			}),
+			Type: BuildAsqNode(d.Type, wildcardIdent),
+			Values: slicex.Map(d.Values, func(val ast.Expr) Expr {
+				return BuildAsqExpr(val, wildcardIdent)
+			}),
 		}
 	default:
 		return &DefaultDecl{Ast: d}
