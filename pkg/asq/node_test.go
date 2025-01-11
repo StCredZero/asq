@@ -8,11 +8,11 @@ import (
 	"testing"
 )
 
-func TestArrayType(t *testing.T) {
+func TestWildcardTagging(t *testing.T) {
 	src := `package test
 func main() {
 	//asq_start
-	var x [5]int
+	/***/x.Method()
 	//asq_end
 }`
 	fset := token.NewFileSet()
@@ -21,32 +21,41 @@ func main() {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
 
-	var arrayType *ast.ArrayType
+	var callExpr *ast.CallExpr
 	ast.Inspect(file, func(n ast.Node) bool {
-		if at, ok := n.(*ast.ArrayType); ok {
-			arrayType = at
+		if ce, ok := n.(*ast.CallExpr); ok {
+			callExpr = ce
 			return false
 		}
 		return true
 	})
 
-	if arrayType == nil {
-		t.Fatal("Failed to find ArrayType node")
+	if callExpr == nil {
+		t.Fatal("Failed to find CallExpr node")
+	}
+
+	p := newPassOne(fset)
+	// Mark the identifier as wildcard
+	if sel, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+		if ident, ok := sel.X.(*ast.Ident); ok {
+			p.markWildcard(ident)
+		}
 	}
 
 	var buf bytes.Buffer
-	node := BuildAsqNode(arrayType, make(map[*ast.Ident]bool))
+	node := BuildAsqNode(callExpr, p)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(array_type length: (literal) @value (#eq? @value "5") element: (identifier) @name (#eq? @name "int"))`
+	// Verify that only the identifier is wildcarded, not the method name
+	expected := `(call_expression function: (selector_expression operand: (identifier) field: (field_identifier) @field (#eq? @field "Method")) arguments: (argument_list))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
 }
 
-func TestBasicLit(t *testing.T) {
+func TestNonIdentWildcardTagging(t *testing.T) {
 	src := `package test
 func main() {
 	//asq_start
@@ -72,8 +81,92 @@ func main() {
 		t.Fatal("Failed to find BasicLit node")
 	}
 
+	p := newPassOne(fset)
 	var buf bytes.Buffer
-	node := BuildAsqNode(basicLit, make(map[*ast.Ident]bool))
+	node := BuildAsqNode(basicLit, p)
+	if err := node.WriteTreeSitterQuery(&buf); err != nil {
+		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
+	}
+
+	// Verify that non-Ident nodes cannot be wildcarded
+	expected := `(literal) @value (#eq? @value "42")`
+	if got := buf.String(); got != expected {
+		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
+	}
+}
+
+func TestArrayType(t *testing.T) {
+	fset := token.NewFileSet()
+	src := `package test
+func main() {
+	//asq_start
+	var x [5]int
+	//asq_end
+}`
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("Failed to parse file: %v", err)
+	}
+
+	var arrayType *ast.ArrayType
+	ast.Inspect(file, func(n ast.Node) bool {
+		if at, ok := n.(*ast.ArrayType); ok {
+			arrayType = at
+			return false
+		}
+		return true
+	})
+
+	if arrayType == nil {
+		t.Fatal("Failed to find ArrayType node")
+	}
+
+	var buf bytes.Buffer
+	var node Node
+	node = BuildAsqNode(arrayType, newPassOne(fset))
+	if err := node.WriteTreeSitterQuery(&buf); err != nil {
+		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
+	}
+
+	expected := `(array_type length: (literal) @value (#eq? @value "5") element: (identifier) @name (#eq? @name "int"))`
+	if got := buf.String(); got != expected {
+		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
+	}
+}
+
+func TestBasicLit(t *testing.T) {
+	fset := token.NewFileSet()
+	src := `package test
+func main() {
+	//asq_start
+	x := 42
+	//asq_end
+}`
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("Failed to parse file: %v", err)
+	}
+
+	var basicLit *ast.BasicLit
+	ast.Inspect(file, func(n ast.Node) bool {
+		if bl, ok := n.(*ast.BasicLit); ok {
+			basicLit = bl
+			return false
+		}
+		return true
+	})
+
+	if basicLit == nil {
+		t.Fatal("Failed to find BasicLit node")
+	}
+
+	var buf bytes.Buffer
+	var node Node
+	node = BuildAsqNode(basicLit, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -85,6 +178,7 @@ func main() {
 }
 
 func TestStructType(t *testing.T) {
+	fset := token.NewFileSet()
 	src := `package test
 func main() {
 	//asq_start
@@ -94,8 +188,9 @@ func main() {
 	}
 	//asq_end
 }`
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
@@ -114,7 +209,8 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	node := BuildAsqNode(structType, make(map[*ast.Ident]bool))
+	var node Node
+	node = BuildAsqNode(structType, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -126,14 +222,16 @@ func main() {
 }
 
 func TestMapType(t *testing.T) {
+	fset := token.NewFileSet()
 	src := `package test
 func main() {
 	//asq_start
 	var m map[string]int
 	//asq_end
 }`
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
@@ -152,7 +250,8 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	node := BuildAsqNode(mapType, make(map[*ast.Ident]bool))
+	var node Node
+	node = BuildAsqNode(mapType, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -164,14 +263,16 @@ func main() {
 }
 
 func TestFuncType(t *testing.T) {
+	fset := token.NewFileSet()
 	src := `package test
 func main() {
 	//asq_start
 	type Handler func(string, int) bool
 	//asq_end
 }`
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
@@ -190,7 +291,8 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	node := BuildAsqNode(funcType, make(map[*ast.Ident]bool))
+	var node Node
+	node = BuildAsqNode(funcType, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -202,6 +304,7 @@ func main() {
 }
 
 func TestGenDecl(t *testing.T) {
+	fset := token.NewFileSet()
 	src := `package test
 //asq_start
 const (
@@ -209,8 +312,9 @@ const (
 	B = 2
 )
 //asq_end`
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
@@ -229,7 +333,8 @@ const (
 	}
 
 	var buf bytes.Buffer
-	node := BuildAsqNode(genDecl, make(map[*ast.Ident]bool))
+	var node Node
+	node = BuildAsqNode(genDecl, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -241,14 +346,16 @@ const (
 }
 
 func TestValueSpec(t *testing.T) {
+	fset := token.NewFileSet()
 	src := `package test
 func main() {
 	//asq_start
 	var x, y int = 1, 2
 	//asq_end
 }`
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
@@ -267,7 +374,8 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	node := BuildAsqNode(valueSpec, make(map[*ast.Ident]bool))
+	var node Node
+	node = BuildAsqNode(valueSpec, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -279,9 +387,11 @@ func main() {
 }
 
 func TestBadDecl(t *testing.T) {
+	fset := token.NewFileSet()
 	badDecl := &ast.BadDecl{}
 	var buf bytes.Buffer
-	node := BuildAsqNode(badDecl, make(map[*ast.Ident]bool))
+	var node Node
+	node = BuildAsqNode(badDecl, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -293,14 +403,16 @@ func TestBadDecl(t *testing.T) {
 }
 
 func TestChanType(t *testing.T) {
+	fset := token.NewFileSet()
 	src := `package test
 func main() {
 	//asq_start
 	var ch chan int
 	//asq_end
 }`
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
@@ -319,7 +431,8 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	node := BuildAsqNode(chanType, make(map[*ast.Ident]bool))
+	var node Node
+	node = BuildAsqNode(chanType, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -331,14 +444,16 @@ func main() {
 }
 
 func TestCompositeLit(t *testing.T) {
+	fset := token.NewFileSet()
 	src := `package test
 func main() {
 	//asq_start
 	x := []int{1, 2}
 	//asq_end
 }`
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
@@ -357,7 +472,8 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	node := BuildAsqNode(compositeLit, make(map[*ast.Ident]bool))
+	var node Node
+	node = BuildAsqNode(compositeLit, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -369,14 +485,16 @@ func main() {
 }
 
 func TestFuncDecl(t *testing.T) {
+	fset := token.NewFileSet()
 	src := `package test
 //asq_start
 func Add(x, y int) int {
 	return x + y
 }
 //asq_end`
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
@@ -395,7 +513,8 @@ func Add(x, y int) int {
 	}
 
 	var buf bytes.Buffer
-	node := BuildAsqNode(funcDecl, make(map[*ast.Ident]bool))
+	var node Node
+	node = BuildAsqNode(funcDecl, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -407,14 +526,16 @@ func Add(x, y int) int {
 }
 
 func TestFuncLit(t *testing.T) {
+	fset := token.NewFileSet()
 	src := `package test
 func main() {
 	//asq_start
 	f := func(x int) int { return x * 2 }
 	//asq_end
 }`
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
@@ -433,7 +554,8 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	node := BuildAsqNode(funcLit, make(map[*ast.Ident]bool))
+	var node Node
+	node = BuildAsqNode(funcLit, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -445,17 +567,20 @@ func main() {
 }
 
 func TestPackage(t *testing.T) {
+	fset := token.NewFileSet()
 	src := `//asq_start
 package test
 //asq_end`
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
 
 	var buf bytes.Buffer
-	node := BuildAsqNode(file, make(map[*ast.Ident]bool))
+	var node Node
+	node = BuildAsqNode(file, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -467,14 +592,16 @@ package test
 }
 
 func TestTypeSpec(t *testing.T) {
+	fset := token.NewFileSet()
 	src := `package test
 //asq_start
 type Point struct {
 	X, Y int
 }
 //asq_end`
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	var err error
+	var file *ast.File
+	file, err = parser.ParseFile(fset, "", src, parser.ParseComments)
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
@@ -493,7 +620,8 @@ type Point struct {
 	}
 
 	var buf bytes.Buffer
-	node := BuildAsqNode(typeSpec, make(map[*ast.Ident]bool))
+	var node Node
+	node = BuildAsqNode(typeSpec, newPassOne(fset))
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
