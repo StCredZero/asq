@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
 	"strings"
 )
 
@@ -13,65 +12,40 @@ import (
 // comments, then converts it to a tree-sitter query.
 func ExtractTreeSitterQuery(filePath string) (string, error) {
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	astFile, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse file: %v", err)
 	}
 
+	passOneData := newPassOne(astFile)
+
 	// Find the code block between comments
+	var collectingComments bool
 	var startPos, endPos token.Pos
-	var hasWildcard bool
-	for _, cg := range file.Comments {
+	for _, cg := range astFile.Comments {
 		for _, c := range cg.List {
 			if strings.TrimSpace(c.Text) == "//asq_start" {
+				collectingComments = true
 				startPos = c.End()
 			} else if strings.TrimSpace(c.Text) == "//asq_end" {
 				endPos = c.Pos()
 				break
 			}
+			if collectingComments && c.Text == "/***/" {
+				passOneData.addInterval(cg.Pos(), cg.End())
+			}
 		}
 	}
+	// pad out the last interval to the //asq_end boundary
+	passOneData.setLastIntervalEnd(endPos)
 
 	if !startPos.IsValid() || !endPos.IsValid() {
 		return "", fmt.Errorf("could not find //asq_start and //asq_end comments")
 	}
 
-	// Get the source code between comments
-	sourceBytes, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read source file: %v", err)
-	}
-	source := string(sourceBytes)
-
-	// Find the code between comments in the source
-	startOffset := fset.Position(startPos).Offset
-	endOffset := fset.Position(endPos).Offset
-	p := newPassOne(fset)
-	if startOffset >= 0 && endOffset > startOffset && endOffset <= len(source) {
-		codeBlock := source[startOffset:endOffset]
-		hasWildcard = strings.Contains(codeBlock, "/***/")
-		if hasWildcard {
-			// Store the position of /***/ for processing
-			wildcardPos := strings.Index(codeBlock, "/***/") + startOffset
-			ast.Inspect(file, func(n ast.Node) bool {
-				if n == nil {
-					return true
-				}
-				// Mark identifiers that appear right after /***/ as wildcards
-				if ident, ok := n.(*ast.Ident); ok {
-					identPos := fset.Position(ident.Pos()).Offset
-					if identPos > wildcardPos && identPos-wildcardPos <= 5 {
-						p.markWildcard(ident)
-					}
-				}
-				return true
-			})
-		}
-	}
-
 	// Extract the AST nodes between the comments
 	var foundNode ast.Node
-	ast.Inspect(file, func(n ast.Node) bool {
+	ast.Inspect(astFile, func(n ast.Node) bool {
 		if n == nil {
 			return true
 		}
@@ -93,5 +67,5 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 	}
 
 	// Convert to tree-sitter query
-	return convertToTreeSitterQuery(foundNode, p)
+	return convertToTreeSitterQuery(foundNode, passOneData)
 }
