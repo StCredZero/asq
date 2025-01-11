@@ -9,7 +9,7 @@ import (
 )
 
 // BuildAsqNode converts an ast.Node to its corresponding asq.Node
-func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
+func BuildAsqNode(node ast.Node, p *passOne) Node {
 	if node == nil {
 		return nil
 	}
@@ -18,9 +18,9 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	case *ast.CallExpr:
 		callExpr := &CallExpr{
 			Ast: astObj,
-			Fun: BuildAsqExpr(astObj.Fun, wildcardIdent),
+			Fun: BuildAsqExpr(astObj.Fun, p),
 			Args: slicex.Map(astObj.Args, func(arg ast.Expr) Expr {
-				return BuildAsqExpr(arg, wildcardIdent)
+				return BuildAsqExpr(arg, p)
 			}),
 		}
 		callExpr.exprNode()
@@ -28,14 +28,14 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	case *ast.SelectorExpr:
 		selExpr := &SelectorExpr{
 			Ast: astObj,
-			X:   BuildAsqExpr(astObj.X, wildcardIdent),
+			X:   BuildAsqExpr(astObj.X, p),
 		}
 		selExpr.exprNode()
 		return selExpr
 	case *ast.Ident:
 		ident := &Ident{
 			Ast:      astObj,
-			Wildcard: wildcardIdent[astObj],
+			Wildcard: p.isWildcard(astObj),
 		}
 		ident.exprNode()
 		return ident
@@ -45,13 +45,13 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 			if basicLit, ok := astObj.Len.(*ast.BasicLit); ok {
 				length = &BasicLit{Ast: basicLit}
 			} else {
-				length = BuildAsqExpr(astObj.Len, wildcardIdent)
+				length = BuildAsqExpr(astObj.Len, p)
 			}
 		}
 		return &ArrayType{
 			Ast: astObj,
 			Len: length,
-			Elt: BuildAsqNode(astObj.Elt, wildcardIdent),
+			Elt: BuildAsqNode(astObj.Elt, p),
 		}
 	case *ast.BasicLit:
 		return &BasicLit{
@@ -60,7 +60,7 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	case *ast.ChanType:
 		return &ChanType{
 			Ast:   astObj,
-			Value: BuildAsqNode(astObj.Value, wildcardIdent),
+			Value: BuildAsqNode(astObj.Value, p),
 		}
 	case *ast.CompositeLit:
 		var elts []Expr
@@ -68,18 +68,18 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 			if basicLit, ok := elt.(*ast.BasicLit); ok {
 				elts = append(elts, &BasicLit{Ast: basicLit})
 			} else {
-				elts = append(elts, BuildAsqExpr(elt, wildcardIdent))
+				elts = append(elts, BuildAsqExpr(elt, p))
 			}
 		}
 		return &CompositeLit{
 			Ast:  astObj,
-			Type: BuildAsqNode(astObj.Type, wildcardIdent),
+			Type: BuildAsqNode(astObj.Type, p),
 			Elts: elts,
 		}
 	case *ast.Field:
 		var names []*Ident
 		for _, name := range astObj.Names {
-			if expr := BuildAsqExpr(name, wildcardIdent); expr != nil {
+			if expr := BuildAsqExpr(name, p); expr != nil {
 				if ident, ok := expr.(*Ident); ok {
 					names = append(names, ident)
 				}
@@ -88,12 +88,12 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 		return &Field{
 			Ast:   astObj,
 			Names: names,
-			Type:  BuildAsqNode(astObj.Type, wildcardIdent),
+			Type:  BuildAsqNode(astObj.Type, p),
 			Tag: func() *BasicLit {
 				if astObj.Tag == nil {
 					return nil
 				}
-				if expr := BuildAsqExpr(astObj.Tag, wildcardIdent); expr != nil {
+				if expr := BuildAsqExpr(astObj.Tag, p); expr != nil {
 					if tag, ok := expr.(*BasicLit); ok {
 						return tag
 					}
@@ -105,7 +105,7 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 		var fields []*Field
 		if astObj.List != nil {
 			fields = slicex.Map(astObj.List, func(field *ast.Field) *Field {
-				if node := BuildAsqNode(field, wildcardIdent); node != nil {
+				if node := BuildAsqNode(field, p); node != nil {
 					return node.(*Field)
 				}
 				return nil
@@ -118,18 +118,18 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	case *ast.FuncLit:
 		return &FuncLit{
 			Ast:  astObj,
-			Type: BuildAsqNode(astObj.Type, wildcardIdent).(*FuncType),
-			Body: BuildAsqNode(astObj.Body, wildcardIdent),
+			Type: BuildAsqNode(astObj.Type, p).(*FuncType),
+			Body: BuildAsqNode(astObj.Body, p),
 		}
 	case *ast.FuncType:
 		var params, results *FieldList
 		if astObj.Params != nil {
-			if node := BuildAsqNode(astObj.Params, wildcardIdent); node != nil {
+			if node := BuildAsqNode(astObj.Params, p); node != nil {
 				params = node.(*FieldList)
 			}
 		}
 		if astObj.Results != nil {
-			if node := BuildAsqNode(astObj.Results, wildcardIdent); node != nil {
+			if node := BuildAsqNode(astObj.Results, p); node != nil {
 				results = node.(*FieldList)
 			}
 		}
@@ -141,19 +141,19 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 	case *ast.MapType:
 		return &MapType{
 			Ast:   astObj,
-			Key:   BuildAsqNode(astObj.Key, wildcardIdent),
-			Value: BuildAsqNode(astObj.Value, wildcardIdent),
+			Key:   BuildAsqNode(astObj.Key, p),
+			Value: BuildAsqNode(astObj.Value, p),
 		}
 	case *ast.StructType:
 		return &StructType{
 			Ast:    astObj,
-			Fields: BuildAsqNode(astObj.Fields, wildcardIdent).(*FieldList),
+			Fields: BuildAsqNode(astObj.Fields, p).(*FieldList),
 		}
 	case *ast.TypeSpec:
 		return &TypeSpec{
 			Ast:  astObj,
-			Name: BuildAsqExpr(astObj.Name, wildcardIdent).(*Ident),
-			Type: BuildAsqNode(astObj.Type, wildcardIdent),
+			Name: BuildAsqExpr(astObj.Name, p).(*Ident),
+			Type: BuildAsqNode(astObj.Type, p),
 		}
 	case *ast.ValueSpec:
 		var values []Expr
@@ -161,15 +161,15 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 			if basicLit, ok := val.(*ast.BasicLit); ok {
 				values = append(values, &BasicLit{Ast: basicLit})
 			} else {
-				values = append(values, BuildAsqExpr(val, wildcardIdent))
+				values = append(values, BuildAsqExpr(val, p))
 			}
 		}
 		return &ValueSpec{
 			Ast: astObj,
 			Names: slicex.Map(astObj.Names, func(name *ast.Ident) *Ident {
-				return BuildAsqExpr(name, wildcardIdent).(*Ident)
+				return BuildAsqExpr(name, p).(*Ident)
 			}),
-			Type:   BuildAsqNode(astObj.Type, wildcardIdent),
+			Type:   BuildAsqNode(astObj.Type, p),
 			Values: values,
 		}
 	case *ast.File:
@@ -178,23 +178,23 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 		}
 		return &Package{
 			Ast:   &ast.Package{Name: astObj.Name.Name},
-			Name:  BuildAsqNode(astObj.Name, wildcardIdent).(*Ident),
+			Name:  BuildAsqNode(astObj.Name, p).(*Ident),
 			Files: make(map[string]Node),
 		}
 	case *ast.FuncDecl:
 		var name *Ident
 		if astObj.Name != nil {
-			name = BuildAsqExpr(astObj.Name, wildcardIdent).(*Ident)
+			name = BuildAsqExpr(astObj.Name, p).(*Ident)
 		}
 		var funcType *FuncType
 		if astObj.Type != nil {
-			if typeNode := BuildAsqNode(astObj.Type, wildcardIdent); typeNode != nil {
+			if typeNode := BuildAsqNode(astObj.Type, p); typeNode != nil {
 				funcType = typeNode.(*FuncType)
 			}
 		}
 		var body Node
 		if astObj.Body != nil && len(astObj.Body.List) == 1 {
-			body = BuildAsqStmt(astObj.Body.List[0], wildcardIdent)
+			body = BuildAsqStmt(astObj.Body.List[0], p)
 		}
 		return &FuncDecl{
 			Ast:  astObj,
@@ -203,16 +203,16 @@ func BuildAsqNode(node ast.Node, wildcardIdent map[*ast.Ident]bool) Node {
 			Body: body,
 		}
 	case ast.Stmt:
-		return BuildAsqStmt(astObj, wildcardIdent)
+		return BuildAsqStmt(astObj, p)
 	case ast.Decl:
-		return BuildAsqDecl(astObj, wildcardIdent)
+		return BuildAsqDecl(astObj, p)
 	default:
 		return &DefaultNode{Node: astObj}
 	}
 }
 
 // BuildAsqExpr converts an ast.Node to its corresponding asq.Node
-func BuildAsqExpr(node ast.Node, wildcardIdent map[*ast.Ident]bool) Expr {
+func BuildAsqExpr(node ast.Node, p *passOne) Expr {
 	if node == nil {
 		return nil
 	}
@@ -221,27 +221,27 @@ func BuildAsqExpr(node ast.Node, wildcardIdent map[*ast.Ident]bool) Expr {
 	case *ast.CallExpr:
 		return &CallExpr{
 			Ast: astObj,
-			Fun: BuildAsqExpr(astObj.Fun, wildcardIdent),
+			Fun: BuildAsqExpr(astObj.Fun, p),
 			Args: slicex.Map(astObj.Args, func(arg ast.Expr) Expr {
-				return BuildAsqExpr(arg, wildcardIdent)
+				return BuildAsqExpr(arg, p)
 			}),
 		}
 	case *ast.BinaryExpr:
 		return &BinaryExpr{
 			Ast: astObj,
-			X:   BuildAsqExpr(astObj.X, wildcardIdent),
+			X:   BuildAsqExpr(astObj.X, p),
 			Op:  astObj.Op,
-			Y:   BuildAsqExpr(astObj.Y, wildcardIdent),
+			Y:   BuildAsqExpr(astObj.Y, p),
 		}
 	case *ast.SelectorExpr:
 		return &SelectorExpr{
 			Ast: astObj,
-			X:   BuildAsqExpr(astObj.X, wildcardIdent),
+			X:   BuildAsqExpr(astObj.X, p),
 		}
 	case *ast.Ident:
 		return &Ident{
 			Ast:      astObj,
-			Wildcard: wildcardIdent[astObj],
+			Wildcard: p.isWildcard(astObj),
 		}
 	default:
 		return &DefaultExpr{Node: astObj}
@@ -1605,7 +1605,7 @@ func (r *ReturnStmt) AstNode() ast.Node {
 // Removed duplicate FuncDecl implementation
 
 // BuildAsqStmt converts an ast.Stmt to its corresponding asq.Stmt
-func BuildAsqStmt(stmt ast.Stmt, wildcardIdent map[*ast.Ident]bool) Stmt {
+func BuildAsqStmt(stmt ast.Stmt, p *passOne) Stmt {
 	if stmt == nil {
 		return nil
 	}
@@ -1615,10 +1615,10 @@ func BuildAsqStmt(stmt ast.Stmt, wildcardIdent map[*ast.Ident]bool) Stmt {
 		return &AssignStmt{
 			Ast: s,
 			Lhs: slicex.Map(s.Lhs, func(lhs ast.Expr) Expr {
-				return BuildAsqExpr(lhs, wildcardIdent)
+				return BuildAsqExpr(lhs, p)
 			}),
 			Rhs: slicex.Map(s.Rhs, func(rhs ast.Expr) Expr {
-				return BuildAsqExpr(rhs, wildcardIdent)
+				return BuildAsqExpr(rhs, p)
 			}),
 		}
 	case *ast.BadStmt:
@@ -1627,7 +1627,7 @@ func BuildAsqStmt(stmt ast.Stmt, wildcardIdent map[*ast.Ident]bool) Stmt {
 		return &BlockStmt{
 			Ast: s,
 			List: slicex.Map(s.List, func(stmt ast.Stmt) Stmt {
-				return BuildAsqStmt(stmt, wildcardIdent)
+				return BuildAsqStmt(stmt, p)
 			}),
 		}
 	case *ast.BranchStmt:
@@ -1642,37 +1642,37 @@ func BuildAsqStmt(stmt ast.Stmt, wildcardIdent map[*ast.Ident]bool) Stmt {
 	case *ast.DeclStmt:
 		return &DeclStmt{
 			Ast:  s,
-			Decl: BuildAsqDecl(s.Decl, wildcardIdent),
+			Decl: BuildAsqDecl(s.Decl, p),
 		}
 	case *ast.DeferStmt:
 		return &DeferStmt{
 			Ast:  s,
-			Call: BuildAsqExpr(s.Call, wildcardIdent),
+			Call: BuildAsqExpr(s.Call, p),
 		}
 	case *ast.EmptyStmt:
 		return &EmptyStmt{Ast: s}
 	case *ast.ExprStmt:
 		return &ExprStmt{
 			Ast: s,
-			X:   BuildAsqExpr(s.X, wildcardIdent),
+			X:   BuildAsqExpr(s.X, p),
 		}
 	case *ast.GoStmt:
 		return &GoStmt{
 			Ast:  s,
-			Call: BuildAsqExpr(s.Call, wildcardIdent),
+			Call: BuildAsqExpr(s.Call, p),
 		}
 	case *ast.IfStmt:
 		return &IfStmt{
 			Ast:  s,
-			Init: BuildAsqStmt(s.Init, wildcardIdent),
-			Cond: BuildAsqExpr(s.Cond, wildcardIdent),
-			Body: BuildAsqStmt(s.Body, wildcardIdent).(*BlockStmt),
-			Else: BuildAsqStmt(s.Else, wildcardIdent),
+			Init: BuildAsqStmt(s.Init, p),
+			Cond: BuildAsqExpr(s.Cond, p),
+			Body: BuildAsqStmt(s.Body, p).(*BlockStmt),
+			Else: BuildAsqStmt(s.Else, p),
 		}
 	case *ast.IncDecStmt:
 		return &IncDecStmt{
 			Ast: s,
-			X:   BuildAsqExpr(s.X, wildcardIdent),
+			X:   BuildAsqExpr(s.X, p),
 		}
 	case *ast.LabeledStmt:
 		var label *Ident
@@ -1682,47 +1682,47 @@ func BuildAsqStmt(stmt ast.Stmt, wildcardIdent map[*ast.Ident]bool) Stmt {
 		return &LabeledStmt{
 			Ast:   s,
 			Label: label,
-			Stmt:  BuildAsqStmt(s.Stmt, wildcardIdent),
+			Stmt:  BuildAsqStmt(s.Stmt, p),
 		}
 	case *ast.RangeStmt:
 		return &RangeStmt{
 			Ast:   s,
-			Key:   BuildAsqExpr(s.Key, wildcardIdent),
-			Value: BuildAsqExpr(s.Value, wildcardIdent),
-			X:     BuildAsqExpr(s.X, wildcardIdent),
-			Body:  BuildAsqStmt(s.Body, wildcardIdent).(*BlockStmt),
+			Key:   BuildAsqExpr(s.Key, p),
+			Value: BuildAsqExpr(s.Value, p),
+			X:     BuildAsqExpr(s.X, p),
+			Body:  BuildAsqStmt(s.Body, p).(*BlockStmt),
 		}
 	case *ast.ReturnStmt:
 		return &ReturnStmt{
 			Ast: s,
 			Results: slicex.Map(s.Results, func(result ast.Expr) Expr {
-				return BuildAsqExpr(result, wildcardIdent)
+				return BuildAsqExpr(result, p)
 			}),
 		}
 	case *ast.SelectStmt:
 		return &SelectStmt{
 			Ast:  s,
-			Body: BuildAsqStmt(s.Body, wildcardIdent).(*BlockStmt),
+			Body: BuildAsqStmt(s.Body, p).(*BlockStmt),
 		}
 	case *ast.SendStmt:
 		return &SendStmt{
 			Ast:   s,
-			Chan:  BuildAsqExpr(s.Chan, wildcardIdent),
-			Value: BuildAsqExpr(s.Value, wildcardIdent),
+			Chan:  BuildAsqExpr(s.Chan, p),
+			Value: BuildAsqExpr(s.Value, p),
 		}
 	case *ast.SwitchStmt:
 		return &SwitchStmt{
 			Ast:  s,
-			Init: BuildAsqStmt(s.Init, wildcardIdent),
-			Tag:  BuildAsqExpr(s.Tag, wildcardIdent),
-			Body: BuildAsqStmt(s.Body, wildcardIdent).(*BlockStmt),
+			Init: BuildAsqStmt(s.Init, p),
+			Tag:  BuildAsqExpr(s.Tag, p),
+			Body: BuildAsqStmt(s.Body, p).(*BlockStmt),
 		}
 	case *ast.TypeSwitchStmt:
 		return &TypeSwitchStmt{
 			Ast:    s,
-			Init:   BuildAsqStmt(s.Init, wildcardIdent),
-			Assign: BuildAsqStmt(s.Assign, wildcardIdent),
-			Body:   BuildAsqStmt(s.Body, wildcardIdent).(*BlockStmt),
+			Init:   BuildAsqStmt(s.Init, p),
+			Assign: BuildAsqStmt(s.Assign, p),
+			Body:   BuildAsqStmt(s.Body, p).(*BlockStmt),
 		}
 	default:
 		return &DefaultStmt{Ast: s}
@@ -1730,7 +1730,7 @@ func BuildAsqStmt(stmt ast.Stmt, wildcardIdent map[*ast.Ident]bool) Stmt {
 }
 
 // BuildAsqDecl converts an ast.Decl to its corresponding asq.Decl
-func BuildAsqDecl(decl ast.Decl, wildcardIdent map[*ast.Ident]bool) Decl {
+func BuildAsqDecl(decl ast.Decl, p *passOne) Decl {
 	if decl == nil {
 		return nil
 	}
@@ -1741,19 +1741,19 @@ func BuildAsqDecl(decl ast.Decl, wildcardIdent map[*ast.Ident]bool) Decl {
 	case *ast.FuncDecl:
 		var name *Ident
 		if d.Name != nil {
-			if expr := BuildAsqExpr(d.Name, wildcardIdent); expr != nil {
+			if expr := BuildAsqExpr(d.Name, p); expr != nil {
 				name = expr.(*Ident)
 			}
 		}
 		var funcType *FuncType
 		if d.Type != nil && (d.Type.Params != nil && len(d.Type.Params.List) > 0 || d.Type.Results != nil && len(d.Type.Results.List) > 0) {
-			if typeNode := BuildAsqNode(d.Type, wildcardIdent); typeNode != nil {
+			if typeNode := BuildAsqNode(d.Type, p); typeNode != nil {
 				funcType = typeNode.(*FuncType)
 			}
 		}
 		var body Node
 		if d.Body != nil {
-			body = BuildAsqNode(d.Body, wildcardIdent)
+			body = BuildAsqNode(d.Body, p)
 			if blockStmt, ok := body.(*BlockStmt); ok && len(blockStmt.Ast.List) == 1 {
 				if ret, ok := blockStmt.Ast.List[0].(*ast.ReturnStmt); ok {
 					body = &ReturnStmt{Ast: ret}
@@ -1770,7 +1770,7 @@ func BuildAsqDecl(decl ast.Decl, wildcardIdent map[*ast.Ident]bool) Decl {
 		return &GenDecl{
 			Ast: d,
 			Specs: slicex.Map(d.Specs, func(spec ast.Spec) Node {
-				return BuildAsqNode(spec, wildcardIdent)
+				return BuildAsqNode(spec, p)
 			}),
 		}
 
