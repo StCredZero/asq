@@ -35,6 +35,19 @@ func runTreeSitterValidation(file, query string) (int, string, error) {
 	}
 	defer q.Close()
 
+	// Debug: Print the tree structure
+	var printNode func(node *sitter.Node, level int)
+	printNode = func(node *sitter.Node, level int) {
+		indent := strings.Repeat("  ", level)
+		fmt.Printf("%s%s\n", indent, node.Type())
+		for i := 0; i < int(node.NamedChildCount()); i++ {
+			child := node.NamedChild(i)
+			printNode(child, level+1)
+		}
+	}
+	fmt.Println("Tree structure:")
+	printNode(root, 0)
+
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
 	qc.Exec(q, root)
@@ -136,7 +149,7 @@ func example() bool {
 	return true
 	//asq_end
 }`,
-			expected: `(return_statement values: (expression_list (identifier) (#eq? _ "true"))) @x`,
+			expected: `(return_statement (expression_list (true))) @x`,
 		},
 		{
 			name: "function_declaration",
@@ -184,20 +197,29 @@ func Example() {
 				return
 			}
 
-			// Find the line number of code between asq_start/asq_end
+			// Find the code between asq_start/asq_end
 			lines := strings.Split(tt.code, "\n")
 			var targetLine int
-			var targetCode string
+			var targetCode []string
+			inTarget := false
 			for i, line := range lines {
-				if strings.TrimSpace(line) == "//asq_start" {
-					// The interesting code is in the next line
-					if i+1 < len(lines) {
-						targetLine = i + 2 // Add 2 because: 1 for 0-based to 1-based, and 1 for the line after asq_start
-						targetCode = strings.TrimSpace(lines[i+1])
-						break
-					}
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "//asq_start" {
+					targetLine = i + 2 // Add 2 because: 1 for 0-based to 1-based, and 1 for the line after asq_start
+					inTarget = true
+					continue
+				}
+				if trimmed == "//asq_end" {
+					inTarget = false
+					continue
+				}
+				if inTarget {
+					targetCode = append(targetCode, line)
 				}
 			}
+
+			// Join all target code lines
+			fullTargetCode := strings.Join(targetCode, "\n")
 
 			// Verify line number matches
 			if lineNum != targetLine {
@@ -206,8 +228,9 @@ func Example() {
 
 			// Verify matched code is a substring of the target code
 			matchedCode = strings.TrimSpace(matchedCode)
-			if !strings.Contains(targetCode, matchedCode) {
-				t.Errorf("Code mismatch:\nExpected to contain: %s\nGot: %s", matchedCode, targetCode)
+			fullTargetCode = strings.TrimSpace(fullTargetCode)
+			if !strings.Contains(fullTargetCode, matchedCode) {
+				t.Errorf("Code mismatch:\nExpected to contain:\n%s\nGot:\n%s", matchedCode, fullTargetCode)
 			}
 		})
 	}

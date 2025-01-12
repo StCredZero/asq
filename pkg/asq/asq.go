@@ -8,6 +8,7 @@ import (
 // Node is the interface that all asq nodes implement.
 type Node interface {
 	WriteTreeSitterQuery(w io.Writer) error
+	WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error
 	AstNode() ast.Node
 }
 

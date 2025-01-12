@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/token"
 	"io"
+	"strings"
 )
 
 // BuildAsqNode converts an ast.Node to its corresponding asq.Node
@@ -193,8 +194,18 @@ func BuildAsqNode(node ast.Node, p *passOne) Node {
 			}
 		}
 		var body Node
-		if astObj.Body != nil && len(astObj.Body.List) == 1 {
-			body = BuildAsqStmt(astObj.Body.List[0], p)
+		if astObj.Body != nil {
+			// Create a BlockStmt to hold all statements in the function body
+			stmts := make([]Stmt, 0, len(astObj.Body.List))
+			for _, stmt := range astObj.Body.List {
+				if s := BuildAsqStmt(stmt, p); s != nil {
+					stmts = append(stmts, s)
+				}
+			}
+			body = &BlockStmt{
+				Ast:  astObj.Body,
+				List: stmts,
+			}
 		}
 		return &FuncDecl{
 			Ast:  astObj,
@@ -203,7 +214,7 @@ func BuildAsqNode(node ast.Node, p *passOne) Node {
 			Body: body,
 		}
 	case ast.Stmt:
-		return BuildAsqStmt(astObj, p)
+		return BuildAsqStmt(astObj, p) // Statement context is handled via WriteTreeSitterQueryWithContext
 	case ast.Decl:
 		return BuildAsqDecl(astObj, p)
 	default:
@@ -259,10 +270,14 @@ type CallExpr struct {
 func (c *CallExpr) exprNode() {}
 
 func (c *CallExpr) WriteTreeSitterQuery(w io.Writer) error {
+	return c.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (c *CallExpr) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(call_expression function: ")); err != nil {
 		return err
 	}
-	if err := c.Fun.WriteTreeSitterQuery(w); err != nil {
+	if err := c.Fun.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 		return err
 	}
 	_, err := w.Write([]byte(" arguments: (argument_list))"))
@@ -283,10 +298,14 @@ type SelectorExpr struct {
 func (s *SelectorExpr) exprNode() {}
 
 func (s *SelectorExpr) WriteTreeSitterQuery(w io.Writer) error {
+	return s.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (s *SelectorExpr) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(selector_expression operand: ")); err != nil {
 		return err
 	}
-	if err := s.X.WriteTreeSitterQuery(w); err != nil {
+	if err := s.X.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 		return err
 	}
 	_, err := fmt.Fprintf(w, ` field: (field_identifier) (#eq? _ "%s"))`, s.Ast.Sel.Name)
@@ -306,6 +325,14 @@ type Ident struct {
 func (i *Ident) exprNode() {}
 
 func (i *Ident) WriteTreeSitterQuery(w io.Writer) error {
+	return i.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (i *Ident) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
+	if i.Ast.Name == "true" || i.Ast.Name == "false" {
+		_, err := fmt.Fprintf(w, `(%s)`, i.Ast.Name)
+		return err
+	}
 	if i.Wildcard {
 		_, err := w.Write([]byte("(identifier)"))
 		return err
@@ -328,6 +355,10 @@ type ArrayType struct {
 func (a *ArrayType) exprNode() {}
 
 func (a *ArrayType) WriteTreeSitterQuery(w io.Writer) error {
+	return a.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (a *ArrayType) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(array_type")); err != nil {
 		return err
 	}
@@ -336,11 +367,11 @@ func (a *ArrayType) WriteTreeSitterQuery(w io.Writer) error {
 			return err
 		}
 		if basicLit, ok := a.Len.(*BasicLit); ok {
-			if err := basicLit.WriteTreeSitterQuery(w); err != nil {
+			if err := basicLit.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 				return err
 			}
 		} else {
-			if err := a.Len.WriteTreeSitterQuery(w); err != nil {
+			if err := a.Len.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 				return err
 			}
 		}
@@ -349,7 +380,7 @@ func (a *ArrayType) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" element: ")); err != nil {
 			return err
 		}
-		if err := a.Elt.WriteTreeSitterQuery(w); err != nil {
+		if err := a.Elt.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -369,6 +400,10 @@ type BadDecl struct {
 func (b *BadDecl) declNode() {}
 
 func (b *BadDecl) WriteTreeSitterQuery(w io.Writer) error {
+	return b.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (b *BadDecl) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	_, err := w.Write([]byte("(bad_declaration)"))
 	return err
 }
@@ -385,6 +420,10 @@ type BasicLit struct {
 func (b *BasicLit) exprNode() {}
 
 func (b *BasicLit) WriteTreeSitterQuery(w io.Writer) error {
+	return b.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (b *BasicLit) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	_, err := fmt.Fprintf(w, `(literal) (#eq? _ "%s")`, b.Ast.Value)
 	return err
 }
@@ -402,6 +441,10 @@ type ChanType struct {
 func (c *ChanType) exprNode() {}
 
 func (c *ChanType) WriteTreeSitterQuery(w io.Writer) error {
+	return c.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (c *ChanType) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(channel_type")); err != nil {
 		return err
 	}
@@ -409,7 +452,7 @@ func (c *ChanType) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" value: ")); err != nil {
 			return err
 		}
-		if err := c.Value.WriteTreeSitterQuery(w); err != nil {
+		if err := c.Value.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -431,6 +474,10 @@ type CompositeLit struct {
 func (c *CompositeLit) exprNode() {}
 
 func (c *CompositeLit) WriteTreeSitterQuery(w io.Writer) error {
+	return c.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (c *CompositeLit) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(composite_literal")); err != nil {
 		return err
 	}
@@ -438,7 +485,7 @@ func (c *CompositeLit) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" type: ")); err != nil {
 			return err
 		}
-		if err := c.Type.WriteTreeSitterQuery(w); err != nil {
+		if err := c.Type.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -452,7 +499,7 @@ func (c *CompositeLit) WriteTreeSitterQuery(w io.Writer) error {
 					return err
 				}
 			}
-			if err := elt.WriteTreeSitterQuery(w); err != nil {
+			if err := elt.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 				return err
 			}
 		}
@@ -479,6 +526,10 @@ type Field struct {
 func (f *Field) declNode() {}
 
 func (f *Field) WriteTreeSitterQuery(w io.Writer) error {
+	return f.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (f *Field) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(field_declaration")); err != nil {
 		return err
 	}
@@ -492,7 +543,7 @@ func (f *Field) WriteTreeSitterQuery(w io.Writer) error {
 					return err
 				}
 			}
-			if err := name.WriteTreeSitterQuery(w); err != nil {
+			if err := name.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 				return err
 			}
 		}
@@ -504,7 +555,7 @@ func (f *Field) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" type: ")); err != nil {
 			return err
 		}
-		if err := f.Type.WriteTreeSitterQuery(w); err != nil {
+		if err := f.Type.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -512,7 +563,7 @@ func (f *Field) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" tag: ")); err != nil {
 			return err
 		}
-		if err := f.Tag.WriteTreeSitterQuery(w); err != nil {
+		if err := f.Tag.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -533,6 +584,10 @@ type FieldList struct {
 func (f *FieldList) declNode() {}
 
 func (f *FieldList) WriteTreeSitterQuery(w io.Writer) error {
+	return f.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (f *FieldList) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(field_list")); err != nil {
 		return err
 	}
@@ -540,7 +595,7 @@ func (f *FieldList) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" ")); err != nil {
 			return err
 		}
-		if err := field.WriteTreeSitterQuery(w); err != nil {
+		if err := field.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -562,6 +617,10 @@ type FuncLit struct {
 func (f *FuncLit) exprNode() {}
 
 func (f *FuncLit) WriteTreeSitterQuery(w io.Writer) error {
+	return f.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (f *FuncLit) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(function_literal")); err != nil {
 		return err
 	}
@@ -569,7 +628,7 @@ func (f *FuncLit) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" type: ")); err != nil {
 			return err
 		}
-		if err := f.Type.WriteTreeSitterQuery(w); err != nil {
+		if err := f.Type.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -591,6 +650,10 @@ type FuncType struct {
 func (f *FuncType) exprNode() {}
 
 func (f *FuncType) WriteTreeSitterQuery(w io.Writer) error {
+	return f.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (f *FuncType) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(function_type")); err != nil {
 		return err
 	}
@@ -598,7 +661,7 @@ func (f *FuncType) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" parameters: ")); err != nil {
 			return err
 		}
-		if err := f.Params.WriteTreeSitterQuery(w); err != nil {
+		if err := f.Params.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -606,7 +669,7 @@ func (f *FuncType) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" results: ")); err != nil {
 			return err
 		}
-		if err := f.Results.WriteTreeSitterQuery(w); err != nil {
+		if err := f.Results.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -627,6 +690,10 @@ type GenDecl struct {
 func (g *GenDecl) declNode() {}
 
 func (g *GenDecl) WriteTreeSitterQuery(w io.Writer) error {
+	return g.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (g *GenDecl) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(generic_declaration ")); err != nil {
 		return err
 	}
@@ -637,11 +704,11 @@ func (g *GenDecl) WriteTreeSitterQuery(w io.Writer) error {
 			}
 		}
 		if valueSpec, ok := spec.(*ValueSpec); ok {
-			if err := valueSpec.WriteTreeSitterQuery(w); err != nil {
+			if err := valueSpec.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 				return err
 			}
 		} else {
-			if err := spec.WriteTreeSitterQuery(w); err != nil {
+			if err := spec.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 				return err
 			}
 		}
@@ -664,6 +731,10 @@ type MapType struct {
 func (m *MapType) exprNode() {}
 
 func (m *MapType) WriteTreeSitterQuery(w io.Writer) error {
+	return m.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (m *MapType) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(map_type")); err != nil {
 		return err
 	}
@@ -671,7 +742,7 @@ func (m *MapType) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" key: ")); err != nil {
 			return err
 		}
-		if err := m.Key.WriteTreeSitterQuery(w); err != nil {
+		if err := m.Key.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -679,7 +750,7 @@ func (m *MapType) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" value: ")); err != nil {
 			return err
 		}
-		if err := m.Value.WriteTreeSitterQuery(w); err != nil {
+		if err := m.Value.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -701,6 +772,10 @@ type Package struct {
 func (p *Package) declNode() {}
 
 func (p *Package) WriteTreeSitterQuery(w io.Writer) error {
+	return p.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (p *Package) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(source_file package_name: ")); err != nil {
 		return err
 	}
@@ -724,6 +799,10 @@ type StructType struct {
 func (s *StructType) exprNode() {}
 
 func (s *StructType) WriteTreeSitterQuery(w io.Writer) error {
+	return s.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (s *StructType) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(struct_type")); err != nil {
 		return err
 	}
@@ -731,7 +810,7 @@ func (s *StructType) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" fields: ")); err != nil {
 			return err
 		}
-		if err := s.Fields.WriteTreeSitterQuery(w); err != nil {
+		if err := s.Fields.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -753,6 +832,10 @@ type TypeSpec struct {
 func (t *TypeSpec) declNode() {}
 
 func (t *TypeSpec) WriteTreeSitterQuery(w io.Writer) error {
+	return t.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (t *TypeSpec) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(type_spec")); err != nil {
 		return err
 	}
@@ -760,7 +843,7 @@ func (t *TypeSpec) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" name: ")); err != nil {
 			return err
 		}
-		if err := t.Name.WriteTreeSitterQuery(w); err != nil {
+		if err := t.Name.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -768,7 +851,7 @@ func (t *TypeSpec) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" type: ")); err != nil {
 			return err
 		}
-		if err := t.Type.WriteTreeSitterQuery(w); err != nil {
+		if err := t.Type.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -791,6 +874,10 @@ type ValueSpec struct {
 func (v *ValueSpec) declNode() {}
 
 func (v *ValueSpec) WriteTreeSitterQuery(w io.Writer) error {
+	return v.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (v *ValueSpec) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(value_spec")); err != nil {
 		return err
 	}
@@ -804,7 +891,7 @@ func (v *ValueSpec) WriteTreeSitterQuery(w io.Writer) error {
 					return err
 				}
 			}
-			if err := name.WriteTreeSitterQuery(w); err != nil {
+			if err := name.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 				return err
 			}
 		}
@@ -816,7 +903,7 @@ func (v *ValueSpec) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" type: ")); err != nil {
 			return err
 		}
-		if err := v.Type.WriteTreeSitterQuery(w); err != nil {
+		if err := v.Type.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -830,7 +917,7 @@ func (v *ValueSpec) WriteTreeSitterQuery(w io.Writer) error {
 					return err
 				}
 			}
-			if err := value.WriteTreeSitterQuery(w); err != nil {
+			if err := value.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 				return err
 			}
 		}
@@ -856,72 +943,48 @@ type FuncDecl struct {
 
 func (f *FuncDecl) declNode() {}
 
-func (f *FuncDecl) WriteTreeSitterQuery(w io.Writer) error {
-	if _, err := w.Write([]byte("(function_declaration")); err != nil {
-		return err
-	}
+func (f *FuncDecl) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
+	var buf strings.Builder
+	buf.WriteString("(function_declaration")
 	if f.Name != nil {
-		if _, err := w.Write([]byte(" name: ")); err != nil {
-			return err
-		}
-		if err := f.Name.WriteTreeSitterQuery(w); err != nil {
+		buf.WriteString(" name: ")
+		if err := f.Name.WriteTreeSitterQueryWithContext(&buf, true); err != nil {
 			return err
 		}
 	}
 	if f.Type != nil && f.Type.Params != nil && len(f.Type.Params.List) > 0 {
-		if _, err := w.Write([]byte(" parameters: ")); err != nil {
-			return err
-		}
-		if err := f.Type.Params.WriteTreeSitterQuery(w); err != nil {
+		buf.WriteString(" parameters: ")
+		if err := f.Type.Params.WriteTreeSitterQueryWithContext(&buf, true); err != nil {
 			return err
 		}
 	}
 	if f.Type != nil && f.Type.Results != nil && len(f.Type.Results.List) > 0 {
-		if _, err := w.Write([]byte(" results: ")); err != nil {
-			return err
-		}
-		if err := f.Type.Results.WriteTreeSitterQuery(w); err != nil {
+		buf.WriteString(" results: ")
+		if err := f.Type.Results.WriteTreeSitterQueryWithContext(&buf, true); err != nil {
 			return err
 		}
 	}
 	if f.Body != nil {
-		if _, err := w.Write([]byte(" body: ")); err != nil {
-			return err
-		}
-		// Check if body is a BlockStmt with a single ReturnStmt
-		if blockStmt, ok := f.Body.(*BlockStmt); ok && len(blockStmt.List) == 1 {
-			if returnStmt, ok := blockStmt.List[0].(*ReturnStmt); ok {
-				// Write the ReturnStmt directly without block wrapper
-				if err := returnStmt.WriteTreeSitterQuery(w); err != nil {
-					return err
-				}
-			} else {
-				// For all other single statements, wrap in block
-				if _, err := w.Write([]byte("(block ")); err != nil {
-					return err
-				}
-				if err := f.Body.WriteTreeSitterQuery(w); err != nil {
-					return err
-				}
-				if _, err := w.Write([]byte(")")); err != nil {
-					return err
-				}
-			}
-		} else {
-			// Not a BlockStmt or has multiple statements
-			if _, err := w.Write([]byte("(block ")); err != nil {
-				return err
-			}
-			if err := f.Body.WriteTreeSitterQuery(w); err != nil {
-				return err
-			}
-			if _, err := w.Write([]byte(")")); err != nil {
+		if blockStmt, ok := f.Body.(*BlockStmt); ok {
+			buf.WriteString(" body: ")
+			// Pass true for inFunc to prevent duplicate @x captures in the function body
+			if err := blockStmt.WriteTreeSitterQueryWithContext(&buf, true); err != nil {
 				return err
 			}
 		}
 	}
-	_, err := w.Write([]byte(")"))
+	buf.WriteString(")")
+	// Only add @x if this is a top-level function declaration
+	if !inFunc {
+		buf.WriteString(" @x")
+	}
+	_, err := w.Write([]byte(buf.String()))
 	return err
+}
+
+func (f *FuncDecl) WriteTreeSitterQuery(w io.Writer) error {
+	// Pass inFunc=true to prevent duplicate @x captures at the top level
+	return f.WriteTreeSitterQueryWithContext(w, true)
 }
 
 func (f *FuncDecl) AstNode() ast.Node {
@@ -953,16 +1016,20 @@ type BinaryExpr struct {
 func (b *BinaryExpr) exprNode() {}
 
 func (b *BinaryExpr) WriteTreeSitterQuery(w io.Writer) error {
+	return b.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (b *BinaryExpr) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(binary_expression left: ")); err != nil {
 		return err
 	}
-	if err := b.X.WriteTreeSitterQuery(w); err != nil {
+	if err := b.X.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 		return err
 	}
 	if _, err := w.Write([]byte(fmt.Sprintf(` operator: "%s" right: `, b.Op.String()))); err != nil {
 		return err
 	}
-	if err := b.Y.WriteTreeSitterQuery(w); err != nil {
+	if err := b.Y.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 		return err
 	}
 	_, err := w.Write([]byte(")"))
@@ -980,6 +1047,10 @@ type DefaultExpr struct {
 func (d *DefaultExpr) exprNode() {}
 
 func (d *DefaultExpr) WriteTreeSitterQuery(w io.Writer) error {
+	return d.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (d *DefaultExpr) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	_, err := fmt.Fprintf(w, "(%T)", d.Node)
 	return err
 }
@@ -1012,6 +1083,10 @@ type DefaultDecl struct {
 func (d *DefaultDecl) declNode() {}
 
 func (d *DefaultDecl) WriteTreeSitterQuery(w io.Writer) error {
+	return d.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (d *DefaultDecl) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	_, err := fmt.Fprintf(w, "(%T)", d.Ast)
 	return err
 }
@@ -1030,6 +1105,10 @@ type AssignStmt struct {
 func (a *AssignStmt) stmtNode() {}
 
 func (a *AssignStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return a.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (a *AssignStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(assignment_expression")); err != nil {
 		return err
 	}
@@ -1042,7 +1121,7 @@ func (a *AssignStmt) WriteTreeSitterQuery(w io.Writer) error {
 				return err
 			}
 		}
-		if err := lhs.WriteTreeSitterQuery(w); err != nil {
+		if err := lhs.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1055,7 +1134,7 @@ func (a *AssignStmt) WriteTreeSitterQuery(w io.Writer) error {
 				return err
 			}
 		}
-		if err := rhs.WriteTreeSitterQuery(w); err != nil {
+		if err := rhs.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1075,6 +1154,10 @@ type BadStmt struct {
 func (b *BadStmt) stmtNode() {}
 
 func (b *BadStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return b.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (b *BadStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	_, err := w.Write([]byte("(bad_statement)"))
 	return err
 }
@@ -1091,7 +1174,16 @@ type BlockStmt struct {
 
 func (b *BlockStmt) stmtNode() {}
 
-func (b *BlockStmt) WriteTreeSitterQuery(w io.Writer) error {
+// DefaultNode implements WriteTreeSitterQueryWithContext
+func (n *DefaultNode) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
+	_, err := fmt.Fprintf(w, "(%T)", n.Node)
+	if !inFunc {
+		_, err = w.Write([]byte(" @x"))
+	}
+	return err
+}
+
+func (b *BlockStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(block")); err != nil {
 		return err
 	}
@@ -1099,12 +1191,27 @@ func (b *BlockStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" ")); err != nil {
 			return err
 		}
-		if err := stmt.WriteTreeSitterQuery(w); err != nil {
+		// Always pass true for inFunc to prevent duplicate @x captures in nested statements
+		if err := stmt.WriteTreeSitterQueryWithContext(w, true); err != nil {
 			return err
 		}
 	}
 	_, err := w.Write([]byte(")"))
 	return err
+}
+
+// Default implementation for statements that don't need special context handling
+func (s *DefaultStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
+	_, err := fmt.Fprintf(w, "(%T)", s.Ast)
+	if !inFunc {
+		_, err = w.Write([]byte(" @x"))
+	}
+	return err
+}
+
+func (b *BlockStmt) WriteTreeSitterQuery(w io.Writer) error {
+	// Pass inFunc=true to prevent duplicate @x captures at the top level
+	return b.WriteTreeSitterQueryWithContext(w, true)
 }
 
 func (b *BlockStmt) AstNode() ast.Node {
@@ -1120,6 +1227,10 @@ type BranchStmt struct {
 func (b *BranchStmt) stmtNode() {}
 
 func (b *BranchStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return b.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (b *BranchStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(branch_statement")); err != nil {
 		return err
 	}
@@ -1127,7 +1238,7 @@ func (b *BranchStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" label: ")); err != nil {
 			return err
 		}
-		if err := b.Label.WriteTreeSitterQuery(w); err != nil {
+		if err := b.Label.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1148,7 +1259,11 @@ type DeclStmt struct {
 func (d *DeclStmt) stmtNode() {}
 
 func (d *DeclStmt) WriteTreeSitterQuery(w io.Writer) error {
-	return d.Decl.WriteTreeSitterQuery(w)
+	return d.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (d *DeclStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
+	return d.Decl.WriteTreeSitterQueryWithContext(w, inFunc)
 }
 
 func (d *DeclStmt) AstNode() ast.Node {
@@ -1164,10 +1279,14 @@ type DeferStmt struct {
 func (d *DeferStmt) stmtNode() {}
 
 func (d *DeferStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return d.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (d *DeferStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(defer_statement expression: ")); err != nil {
 		return err
 	}
-	if err := d.Call.WriteTreeSitterQuery(w); err != nil {
+	if err := d.Call.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 		return err
 	}
 	_, err := w.Write([]byte(")"))
@@ -1186,6 +1305,10 @@ type EmptyStmt struct {
 func (e *EmptyStmt) stmtNode() {}
 
 func (e *EmptyStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return e.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (e *EmptyStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	_, err := w.Write([]byte("(empty_statement)"))
 	return err
 }
@@ -1203,7 +1326,11 @@ type ExprStmt struct {
 func (e *ExprStmt) stmtNode() {}
 
 func (e *ExprStmt) WriteTreeSitterQuery(w io.Writer) error {
-	return e.X.WriteTreeSitterQuery(w)
+	return e.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (e *ExprStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
+	return e.X.WriteTreeSitterQueryWithContext(w, inFunc)
 }
 
 func (e *ExprStmt) AstNode() ast.Node {
@@ -1219,10 +1346,14 @@ type GoStmt struct {
 func (g *GoStmt) stmtNode() {}
 
 func (g *GoStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return g.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (g *GoStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(go_statement expression: ")); err != nil {
 		return err
 	}
-	if err := g.Call.WriteTreeSitterQuery(w); err != nil {
+	if err := g.Call.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 		return err
 	}
 	_, err := w.Write([]byte(")"))
@@ -1245,6 +1376,10 @@ type IfStmt struct {
 func (i *IfStmt) stmtNode() {}
 
 func (i *IfStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return i.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (i *IfStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(if_statement")); err != nil {
 		return err
 	}
@@ -1252,7 +1387,7 @@ func (i *IfStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" initializer: ")); err != nil {
 			return err
 		}
-		if err := i.Init.WriteTreeSitterQuery(w); err != nil {
+		if err := i.Init.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1260,7 +1395,7 @@ func (i *IfStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" condition: ")); err != nil {
 			return err
 		}
-		if err := i.Cond.WriteTreeSitterQuery(w); err != nil {
+		if err := i.Cond.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1268,7 +1403,7 @@ func (i *IfStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" consequence: ")); err != nil {
 			return err
 		}
-		if err := i.Body.WriteTreeSitterQuery(w); err != nil {
+		if err := i.Body.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1276,7 +1411,7 @@ func (i *IfStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" alternative: ")); err != nil {
 			return err
 		}
-		if err := i.Else.WriteTreeSitterQuery(w); err != nil {
+		if err := i.Else.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1297,10 +1432,14 @@ type IncDecStmt struct {
 func (i *IncDecStmt) stmtNode() {}
 
 func (i *IncDecStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return i.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (i *IncDecStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(inc_dec_statement expression: ")); err != nil {
 		return err
 	}
-	if err := i.X.WriteTreeSitterQuery(w); err != nil {
+	if err := i.X.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 		return err
 	}
 	_, err := w.Write([]byte(")"))
@@ -1321,6 +1460,10 @@ type LabeledStmt struct {
 func (l *LabeledStmt) stmtNode() {}
 
 func (l *LabeledStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return l.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (l *LabeledStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(labeled_statement")); err != nil {
 		return err
 	}
@@ -1328,7 +1471,7 @@ func (l *LabeledStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" label: ")); err != nil {
 			return err
 		}
-		if err := l.Label.WriteTreeSitterQuery(w); err != nil {
+		if err := l.Label.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1336,7 +1479,7 @@ func (l *LabeledStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" statement: ")); err != nil {
 			return err
 		}
-		if err := l.Stmt.WriteTreeSitterQuery(w); err != nil {
+		if err := l.Stmt.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1360,6 +1503,10 @@ type RangeStmt struct {
 func (r *RangeStmt) stmtNode() {}
 
 func (r *RangeStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return r.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (r *RangeStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(range_statement")); err != nil {
 		return err
 	}
@@ -1367,7 +1514,7 @@ func (r *RangeStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" key: ")); err != nil {
 			return err
 		}
-		if err := r.Key.WriteTreeSitterQuery(w); err != nil {
+		if err := r.Key.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1375,7 +1522,7 @@ func (r *RangeStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" value: ")); err != nil {
 			return err
 		}
-		if err := r.Value.WriteTreeSitterQuery(w); err != nil {
+		if err := r.Value.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1383,7 +1530,7 @@ func (r *RangeStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" expression: ")); err != nil {
 			return err
 		}
-		if err := r.X.WriteTreeSitterQuery(w); err != nil {
+		if err := r.X.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1391,7 +1538,7 @@ func (r *RangeStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" body: ")); err != nil {
 			return err
 		}
-		if err := r.Body.WriteTreeSitterQuery(w); err != nil {
+		if err := r.Body.WriteTreeSitterQueryWithContext(w, inFunc); err != nil {
 			return err
 		}
 	}
@@ -1412,6 +1559,10 @@ type SelectStmt struct {
 func (s *SelectStmt) stmtNode() {}
 
 func (s *SelectStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return s.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (s *SelectStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(select_statement")); err != nil {
 		return err
 	}
@@ -1419,12 +1570,18 @@ func (s *SelectStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" body: ")); err != nil {
 			return err
 		}
-		if err := s.Body.WriteTreeSitterQuery(w); err != nil {
+		if err := s.Body.WriteTreeSitterQueryWithContext(w, true); err != nil {
 			return err
 		}
 	}
-	_, err := w.Write([]byte(")"))
-	return err
+	if _, err := w.Write([]byte(")")); err != nil {
+		return err
+	}
+	if !inFunc {
+		_, err := w.Write([]byte(" @x"))
+		return err
+	}
+	return nil
 }
 
 func (s *SelectStmt) AstNode() ast.Node {
@@ -1441,6 +1598,10 @@ type SendStmt struct {
 func (s *SendStmt) stmtNode() {}
 
 func (s *SendStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return s.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (s *SendStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(send_statement")); err != nil {
 		return err
 	}
@@ -1448,7 +1609,7 @@ func (s *SendStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" channel: ")); err != nil {
 			return err
 		}
-		if err := s.Chan.WriteTreeSitterQuery(w); err != nil {
+		if err := s.Chan.WriteTreeSitterQueryWithContext(w, true); err != nil {
 			return err
 		}
 	}
@@ -1456,12 +1617,18 @@ func (s *SendStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" value: ")); err != nil {
 			return err
 		}
-		if err := s.Value.WriteTreeSitterQuery(w); err != nil {
+		if err := s.Value.WriteTreeSitterQueryWithContext(w, true); err != nil {
 			return err
 		}
 	}
-	_, err := w.Write([]byte(")"))
-	return err
+	if _, err := w.Write([]byte(")")); err != nil {
+		return err
+	}
+	if !inFunc {
+		_, err := w.Write([]byte(" @x"))
+		return err
+	}
+	return nil
 }
 
 func (s *SendStmt) AstNode() ast.Node {
@@ -1479,6 +1646,10 @@ type SwitchStmt struct {
 func (s *SwitchStmt) stmtNode() {}
 
 func (s *SwitchStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return s.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (s *SwitchStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(switch_statement")); err != nil {
 		return err
 	}
@@ -1486,7 +1657,7 @@ func (s *SwitchStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" initializer: ")); err != nil {
 			return err
 		}
-		if err := s.Init.WriteTreeSitterQuery(w); err != nil {
+		if err := s.Init.WriteTreeSitterQueryWithContext(w, true); err != nil {
 			return err
 		}
 	}
@@ -1494,7 +1665,7 @@ func (s *SwitchStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" value: ")); err != nil {
 			return err
 		}
-		if err := s.Tag.WriteTreeSitterQuery(w); err != nil {
+		if err := s.Tag.WriteTreeSitterQueryWithContext(w, true); err != nil {
 			return err
 		}
 	}
@@ -1502,12 +1673,18 @@ func (s *SwitchStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" body: ")); err != nil {
 			return err
 		}
-		if err := s.Body.WriteTreeSitterQuery(w); err != nil {
+		if err := s.Body.WriteTreeSitterQueryWithContext(w, true); err != nil {
 			return err
 		}
 	}
-	_, err := w.Write([]byte(")"))
-	return err
+	if _, err := w.Write([]byte(")")); err != nil {
+		return err
+	}
+	if !inFunc {
+		_, err := w.Write([]byte(" @x"))
+		return err
+	}
+	return nil
 }
 
 func (s *SwitchStmt) AstNode() ast.Node {
@@ -1525,6 +1702,10 @@ type TypeSwitchStmt struct {
 func (t *TypeSwitchStmt) stmtNode() {}
 
 func (t *TypeSwitchStmt) WriteTreeSitterQuery(w io.Writer) error {
+	return t.WriteTreeSitterQueryWithContext(w, false)
+}
+
+func (t *TypeSwitchStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
 	if _, err := w.Write([]byte("(type_switch_statement")); err != nil {
 		return err
 	}
@@ -1532,7 +1713,7 @@ func (t *TypeSwitchStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" initializer: ")); err != nil {
 			return err
 		}
-		if err := t.Init.WriteTreeSitterQuery(w); err != nil {
+		if err := t.Init.WriteTreeSitterQueryWithContext(w, true); err != nil {
 			return err
 		}
 	}
@@ -1540,7 +1721,7 @@ func (t *TypeSwitchStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" assign: ")); err != nil {
 			return err
 		}
-		if err := t.Assign.WriteTreeSitterQuery(w); err != nil {
+		if err := t.Assign.WriteTreeSitterQueryWithContext(w, true); err != nil {
 			return err
 		}
 	}
@@ -1548,12 +1729,18 @@ func (t *TypeSwitchStmt) WriteTreeSitterQuery(w io.Writer) error {
 		if _, err := w.Write([]byte(" body: ")); err != nil {
 			return err
 		}
-		if err := t.Body.WriteTreeSitterQuery(w); err != nil {
+		if err := t.Body.WriteTreeSitterQueryWithContext(w, true); err != nil {
 			return err
 		}
 	}
-	_, err := w.Write([]byte(")"))
-	return err
+	if _, err := w.Write([]byte(")")); err != nil {
+		return err
+	}
+	if !inFunc {
+		_, err := w.Write([]byte(" @x"))
+		return err
+	}
+	return nil
 }
 
 func (t *TypeSwitchStmt) AstNode() ast.Node {
@@ -1569,32 +1756,34 @@ type ReturnStmt struct {
 func (r *ReturnStmt) stmtNode() {}
 
 func (r *ReturnStmt) WriteTreeSitterQuery(w io.Writer) error {
-	if _, err := w.Write([]byte("(return_statement")); err != nil {
-		return err
-	}
+	// Pass inFunc=true to prevent duplicate @x captures at the top level
+	return r.WriteTreeSitterQueryWithContext(w, true)
+}
+
+func (r *ReturnStmt) WriteTreeSitterQueryWithContext(w io.Writer, inFunc bool) error {
+	var buf strings.Builder
+	buf.WriteString("(return_statement")
 	if len(r.Results) > 0 {
-		if _, err := w.Write([]byte(" values: (expression_list")); err != nil {
-			return err
-		}
+		buf.WriteString(" values: (expression_list")
 		for _, result := range r.Results {
-			if _, err := w.Write([]byte(" ")); err != nil {
-				return err
-			}
-			if ident, ok := result.(*Ident); ok {
-				if _, err := fmt.Fprintf(w, `(identifier) (#eq? _ "%s")`, ident.Ast.Name); err != nil {
-					return err
-				}
+			buf.WriteString(" ")
+			if ident, ok := result.(*Ident); ok && (ident.Ast.Name == "true" || ident.Ast.Name == "false") {
+				fmt.Fprintf(&buf, `(%s)`, ident.Ast.Name)
 			} else {
-				if err := result.WriteTreeSitterQuery(w); err != nil {
+				// Always pass inFunc=true to prevent nested @x captures
+				if err := result.WriteTreeSitterQueryWithContext(&buf, true); err != nil {
 					return err
 				}
 			}
 		}
-		if _, err := w.Write([]byte(")")); err != nil {
-			return err
-		}
+		buf.WriteString(")")
 	}
-	_, err := w.Write([]byte(")"))
+	buf.WriteString(")")
+	// Only add @x if this is not in a function context and we're at the top level
+	if !inFunc {
+		buf.WriteString(" @x")
+	}
+	_, err := w.Write([]byte(buf.String()))
 	return err
 }
 
@@ -1753,11 +1942,11 @@ func BuildAsqDecl(decl ast.Decl, p *passOne) Decl {
 		}
 		var body Node
 		if d.Body != nil {
-			body = BuildAsqNode(d.Body, p)
-			if blockStmt, ok := body.(*BlockStmt); ok && len(blockStmt.Ast.List) == 1 {
-				if ret, ok := blockStmt.Ast.List[0].(*ast.ReturnStmt); ok {
-					body = &ReturnStmt{Ast: ret}
-				}
+			stmt := BuildAsqStmt(d.Body, p)
+			if returnStmt, ok := stmt.(*ReturnStmt); ok {
+				body = returnStmt
+			} else {
+				body = stmt
 			}
 		}
 		return &FuncDecl{
