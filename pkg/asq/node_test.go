@@ -42,7 +42,7 @@ func main() {
 	}
 
 	// Verify that non-Ident nodes cannot be wildcarded
-	expected := `(literal) (#eq? _ "42")`
+	expected := `(literal) @value (#eq? @value "42")`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -83,7 +83,7 @@ func main() {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(array_type length: (literal) (#eq? _ "5") element: (identifier) (#eq? _ "int"))`
+	expected := `(array_type length: (literal) @value (#eq? @value "5") element: (identifier) @name (#eq? @name "int"))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -124,7 +124,7 @@ func main() {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(literal) (#eq? _ "42")`
+	expected := `(literal) @value (#eq? @value "42")`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -168,7 +168,7 @@ func main() {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(struct_type fields: (field_list (field_declaration names: ((identifier) (#eq? _ "Name")) type: (identifier) (#eq? _ "string")) (field_declaration names: ((identifier) (#eq? _ "Age")) type: (identifier) (#eq? _ "int"))))`
+	expected := `(struct_type fields: (field_list (field_declaration names: ((identifier) @name (#eq? @name "Name")) type: (identifier) @name (#eq? @name "string")) (field_declaration names: ((identifier) @name (#eq? @name "Age")) type: (identifier) @name (#eq? @name "int"))))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -209,7 +209,7 @@ func main() {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(map_type key: (identifier) (#eq? _ "string") value: (identifier) (#eq? _ "int"))`
+	expected := `(map_type key: (identifier) @name (#eq? @name "string") value: (identifier) @name (#eq? @name "int"))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -250,7 +250,7 @@ func main() {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(function_type parameters: (field_list (field_declaration type: (identifier) (#eq? _ "string")) (field_declaration type: (identifier) (#eq? _ "int"))) results: (field_list (field_declaration type: (identifier) (#eq? _ "bool"))))`
+	expected := `(function_type parameters: (field_list (field_declaration type: (identifier) @name (#eq? @name "string")) (field_declaration type: (identifier) @name (#eq? @name "int"))) results: (field_list (field_declaration type: (identifier) @name (#eq? @name "bool"))))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -292,7 +292,7 @@ const (
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(generic_declaration (value_spec names: ((identifier) (#eq? _ "A")) values: ((literal) (#eq? _ "1"))) (value_spec names: ((identifier) (#eq? _ "B")) values: ((literal) (#eq? _ "2"))))`
+	expected := `(generic_declaration (value_spec names: ((identifier) @name (#eq? @name "A")) values: ((literal) @value (#eq? @value "1"))) (value_spec names: ((identifier) @name (#eq? @name "B")) values: ((literal) @value (#eq? @value "2"))))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -333,7 +333,7 @@ func main() {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(value_spec names: ((identifier) (#eq? _ "x") (identifier) (#eq? _ "y")) type: (identifier) (#eq? _ "int") values: ((literal) (#eq? _ "1") (literal) (#eq? _ "2")))`
+	expected := `(value_spec names: ((identifier) @name (#eq? @name "x") (identifier) @name (#eq? @name "y")) type: (identifier) @name (#eq? @name "int") values: ((literal) @value (#eq? @value "1") (literal) @value (#eq? @value "2")))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -374,7 +374,7 @@ func main() {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(channel_type value: (identifier) (#eq? _ "int"))`
+	expected := `(channel_type value: (identifier) @name (#eq? @name "int"))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -415,7 +415,7 @@ func main() {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(composite_literal type: (array_type element: (identifier) (#eq? _ "int")) elements: ((literal) (#eq? _ "1") (literal) (#eq? _ "2")))`
+	expected := `(composite_literal type: (array_type element: (identifier) @name (#eq? @name "int")) elements: ((literal) @value (#eq? @value "1") (literal) @value (#eq? @value "2")))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -456,7 +456,7 @@ func Add(x, y int) int {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(function_declaration name: (identifier) (#eq? _ "Add") parameters: (field_list (field_declaration names: ((identifier) (#eq? _ "x") (identifier) (#eq? _ "y")) type: (identifier) (#eq? _ "int"))) results: (field_list (field_declaration type: (identifier) (#eq? _ "int"))) body: (block (return_statement values: (expression_list (binary_expression left: (identifier) (#eq? _ "x") operator: "+" right: (identifier) (#eq? _ "y"))))))`
+	expected := `(function_declaration name: (identifier) @name (#eq? @name "Add") parameters: (field_list (field_declaration names: ((identifier) @name (#eq? @name "x") (identifier) @name (#eq? @name "y")) type: (identifier) @name (#eq? @name "int"))) results: (field_list (field_declaration type: (identifier) @name (#eq? @name "int"))) body: (block (return_statement values: (expression_list (binary_expression left: (identifier) @name (#eq? @name "x") operator: "+" right: (identifier) @name (#eq? @name "y"))))))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -497,7 +497,7 @@ func main() {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(function_literal type: (function_type parameters: (field_list (field_declaration names: ((identifier) (#eq? _ "x")) type: (identifier) (#eq? _ "int"))) results: (field_list (field_declaration type: (identifier) (#eq? _ "int")))))`
+	expected := `(function_literal type: (function_type parameters: (field_list (field_declaration names: ((identifier) @name (#eq? @name "x")) type: (identifier) @name (#eq? @name "int"))) results: (field_list (field_declaration type: (identifier) @name (#eq? @name "int")))))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -522,7 +522,7 @@ package test
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(source_file package_name: (identifier) (#eq? _ "test"))`
+	expected := `(source_file package_name: (identifier) @name (#eq? @name "test"))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
@@ -563,7 +563,7 @@ type Point struct {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
 
-	expected := `(type_spec name: (identifier) (#eq? _ "Point") type: (struct_type fields: (field_list (field_declaration names: ((identifier) (#eq? _ "X") (identifier) (#eq? _ "Y")) type: (identifier) (#eq? _ "int")))))`
+	expected := `(type_spec name: (identifier) @name (#eq? @name "Point") type: (struct_type fields: (field_list (field_declaration names: ((identifier) @name (#eq? @name "X") (identifier) @name (#eq? @name "Y")) type: (identifier) @name (#eq? @name "int")))))`
 	if got := buf.String(); got != expected {
 		t.Errorf("Expected:\n%s\nGot:\n%s", expected, got)
 	}
