@@ -27,7 +27,7 @@ func asq_query2() {
 	e.Inst().Foo()
 	//asq_end
 }`,
-			expected: `(call_expression function: (selector_expression operand: (call_expression function: (selector_expression operand: (identifier) (#eq? _ "e") field: (field_identifier) (#eq? _ "Inst")) arguments: (argument_list)) field: (field_identifier) (#eq? _ "Foo")) arguments: (argument_list)) @x`,
+			expected: `(call_expression function: (selector_expression operand: (call_expression function: (selector_expression operand: (identifier) @name (#eq? @name "e") field: (field_identifier) @field (#eq? @field "Inst")) arguments: (argument_list)) field: (field_identifier) @field (#eq? @field "Foo")) arguments: (argument_list)) @x`,
 		},
 		{
 			name: "wildcard_match",
@@ -41,7 +41,7 @@ func asq_query2() {
 	/***/e.Inst().Foo()
 	//asq_end
 }`,
-			expected: `(call_expression function: (selector_expression operand: (call_expression function: (selector_expression operand: (identifier) field: (field_identifier) (#eq? _ "Inst")) arguments: (argument_list)) field: (field_identifier) (#eq? _ "Foo")) arguments: (argument_list)) @x`,
+			expected: `(call_expression function: (selector_expression operand: (call_expression function: (selector_expression operand: (identifier) field: (field_identifier) @field (#eq? @field "Inst")) arguments: (argument_list)) field: (field_identifier) @field (#eq? @field "Foo")) arguments: (argument_list)) @x`,
 		},
 		{
 			name: "exact_match_with_different_receiver",
@@ -55,7 +55,7 @@ func asq_query2() {
 	x.Inst().Foo()
 	//asq_end
 }`,
-			expected: `(call_expression function: (selector_expression operand: (call_expression function: (selector_expression operand: (identifier) (#eq? _ "x") field: (field_identifier) (#eq? _ "Inst")) arguments: (argument_list)) field: (field_identifier) (#eq? _ "Foo")) arguments: (argument_list)) @x`,
+			expected: `(call_expression function: (selector_expression operand: (call_expression function: (selector_expression operand: (identifier) @name (#eq? @name "x") field: (field_identifier) @field (#eq? @field "Inst")) arguments: (argument_list)) field: (field_identifier) @field (#eq? @field "Foo")) arguments: (argument_list)) @x`,
 		},
 		{
 			name: "negative_test_different_method",
@@ -69,7 +69,7 @@ func asq_query2() {
 	e.Inst2().Foo()
 	//asq_end
 }`,
-			expected: `(call_expression function: (selector_expression operand: (call_expression function: (selector_expression operand: (identifier) (#eq? _ "e") field: (field_identifier) (#eq? _ "Inst2")) arguments: (argument_list)) field: (field_identifier) (#eq? _ "Foo")) arguments: (argument_list)) @x`,
+			expected: `(call_expression function: (selector_expression operand: (call_expression function: (selector_expression operand: (identifier) @name (#eq? @name "e") field: (field_identifier) @field (#eq? @field "Inst2")) arguments: (argument_list)) field: (field_identifier) @field (#eq? @field "Foo")) arguments: (argument_list)) @x`,
 		},
 		{
 			name: "return_stmt_no_results",
@@ -89,7 +89,7 @@ func example() bool {
 	return true
 	//asq_end
 }`,
-			expected: `(return_statement values: (expression_list (identifier) (#eq? _ "true"))) @x`,
+			expected: `(return_statement values: (expression_list (identifier) @value (#eq? @value "true"))) @x`,
 		},
 		{
 			name: "function_declaration",
@@ -99,7 +99,7 @@ func Example() {
 	return
 }
 //asq_end`,
-			expected: `(function_declaration name: (identifier) (#eq? _ "Example") body: (block (return_statement))) @x`,
+			expected: `(function_declaration name: (identifier) @name (#eq? @name "Example") body: (block (return_statement))) @x`,
 		},
 	}
 
