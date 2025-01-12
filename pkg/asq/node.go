@@ -1573,15 +1573,21 @@ func (r *ReturnStmt) WriteTreeSitterQuery(w io.Writer) error {
 		return err
 	}
 	if len(r.Results) > 0 {
-		if _, err := w.Write([]byte(" values: (expression_list")); err != nil {
+		if _, err := w.Write([]byte(" (expression_list ")); err != nil {
 			return err
 		}
-		for _, result := range r.Results {
-			if _, err := w.Write([]byte(" ")); err != nil {
-				return err
+		for i, result := range r.Results {
+			if i > 0 {
+				if _, err := w.Write([]byte(" ")); err != nil {
+					return err
+				}
 			}
 			if ident, ok := result.(*Ident); ok {
-				if _, err := fmt.Fprintf(w, `(identifier) @value (#eq? @value "%s")`, ident.Ast.Name); err != nil {
+				if ident.Ast.Name == "true" {
+					if _, err := w.Write([]byte("(true)")); err != nil {
+						return err
+					}
+				} else if _, err := fmt.Fprintf(w, `(identifier) @value (#eq? @value "%s")`, ident.Ast.Name); err != nil {
 					return err
 				}
 			} else {
