@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-	sitter "github.com/smacker/go-tree-sitter"
 	"os"
 	"path/filepath"
 	"strings"
@@ -133,7 +131,7 @@ func Example() {
 			}
 
 			// Validate query using tree-sitter
-			lineNum, matchedCode, err := runTreeSitterValidation(testFile, tt.expected)
+			lineNum, matchedCode, err := asq.ValidateTreeSitterQuery(testFile, tt.expected)
 			if err != nil {
 				t.Errorf("Failed to validate query: %v", err)
 				return
@@ -166,53 +164,4 @@ func Example() {
 			}
 		})
 	}
-}
-
-// runTreeSitterValidation executes a tree-sitter query directly on the given file
-// returns the line number and matched code, or error if validation fails
-func runTreeSitterValidation(file, query string) (int, string, error) {
-	contents, err := os.ReadFile(file)
-	if err != nil {
-		return 0, "", fmt.Errorf("failed to read file: %v", err)
-	}
-
-	lang, err := asq.GetTSLanguageFromEnry(file, contents)
-	if err != nil {
-		return 0, "", fmt.Errorf("failed to get language: %v", err)
-	}
-
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
-	tree := parser.Parse(nil, contents)
-	root := tree.RootNode()
-
-	q, err := sitter.NewQuery([]byte(query), lang)
-	if err != nil {
-		return 0, "", fmt.Errorf("invalid query: %v", err)
-	}
-	defer q.Close()
-
-	qc := sitter.NewQueryCursor()
-	defer qc.Close()
-	qc.Exec(q, root)
-
-	// Only retrieve the first relevant capture with @x
-	for {
-		match, ok := qc.NextMatch()
-		if !ok {
-			break
-		}
-		for _, c := range match.Captures {
-			if q.CaptureNameForId(c.Index) == "x" {
-				row := int(c.Node.StartPoint().Row) + 1
-				code := string(contents[c.Node.StartByte():c.Node.EndByte()])
-				lines := strings.Split(code, "\n")
-				if len(lines) >= 1 {
-					return row, strings.TrimSpace(lines[0]), nil
-				}
-				return row, "", nil
-			}
-		}
-	}
-	return 0, "", fmt.Errorf("no match found for capture @x")
 }
