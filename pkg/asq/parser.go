@@ -67,5 +67,5 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 	}
 
 	// Convert to tree-sitter query
-	return convertToTreeSitterQuery(foundNode, passOneData)
+	return ConvertToTreeSitterQuery(foundNode, passOneData)
 }
