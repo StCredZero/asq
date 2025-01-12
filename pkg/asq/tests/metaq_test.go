@@ -1,13 +1,60 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/StCredZero/asq/pkg/asq"
+	sitter "github.com/smacker/go-tree-sitter"
 )
+
+// runTreeSitterValidation executes a tree-sitter query directly on the given file
+// returns the line number and matched code, or error if validation fails
+func runTreeSitterValidation(file, query string) (int, string, error) {
+	contents, err := os.ReadFile(file)
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to read file: %v", err)
+	}
+
+	lang, err := asq.GetTSLanguageFromEnry(file, contents)
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to get language: %v", err)
+	}
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(lang)
+	tree := parser.Parse(nil, contents)
+	root := tree.RootNode()
+
+	q, err := sitter.NewQuery([]byte(query), lang)
+	if err != nil {
+		return 0, "", fmt.Errorf("invalid query: %v", err)
+	}
+	defer q.Close()
+
+	qc := sitter.NewQueryCursor()
+	defer qc.Close()
+	qc.Exec(q, root)
+
+	// Only retrieve the first relevant capture with @x
+	for {
+		match, ok := qc.NextMatch()
+		if !ok {
+			break
+		}
+		for _, c := range match.Captures {
+			if q.CaptureNameForId(c.Index) == "x" {
+				row := int(c.Node.StartPoint().Row) + 1
+				code := string(contents[c.Node.StartByte():c.Node.EndByte()])
+				return row, strings.TrimSpace(code), nil
+			}
+		}
+	}
+	return 0, "", fmt.Errorf("no match found for capture @x")
+}
 
 func TestMetaqQuery(t *testing.T) {
 	tests := []struct {
@@ -125,9 +172,42 @@ func Example() {
 				t.Fatalf("Failed to extract query: %v", err)
 			}
 
-			// Compare output
+			// Compare query output
 			if got := strings.TrimSpace(query); got != strings.TrimSpace(tt.expected) {
-				t.Errorf("\nExpected:\n%s\nGot:\n%s", tt.expected, got)
+				t.Errorf("\nExpected query:\n%s\nGot:\n%s", tt.expected, got)
+			}
+
+			// Validate query using tree-sitter
+			lineNum, matchedCode, err := runTreeSitterValidation(testFile, tt.expected)
+			if err != nil {
+				t.Errorf("Failed to validate query: %v", err)
+				return
+			}
+
+			// Find the line number of code between asq_start/asq_end
+			lines := strings.Split(tt.code, "\n")
+			var targetLine int
+			var targetCode string
+			for i, line := range lines {
+				if strings.TrimSpace(line) == "//asq_start" {
+					// The interesting code is in the next line
+					if i+1 < len(lines) {
+						targetLine = i + 2 // Add 2 because: 1 for 0-based to 1-based, and 1 for the line after asq_start
+						targetCode = strings.TrimSpace(lines[i+1])
+						break
+					}
+				}
+			}
+
+			// Verify line number matches
+			if lineNum != targetLine {
+				t.Errorf("Line number mismatch: expected %d, got %d", targetLine, lineNum)
+			}
+
+			// Verify matched code is a substring of the target code
+			matchedCode = strings.TrimSpace(matchedCode)
+			if !strings.Contains(targetCode, matchedCode) {
+				t.Errorf("Code mismatch:\nExpected to contain: %s\nGot: %s", matchedCode, targetCode)
 			}
 		})
 	}
