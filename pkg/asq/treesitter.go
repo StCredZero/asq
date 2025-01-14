@@ -43,17 +43,24 @@ func GetTSLanguageFromEnry(filename string, contents []byte) (*sitter.Language, 
 	}
 }
 
+// Match represents a single tree-sitter query match
+type Match struct {
+	Row  int
+	Col  int
+	Code string
+}
+
 // ValidateTreeSitterQuery executes a tree-sitter query directly on the given file
-// returns the line number and matched code, or error if validation fails
-func ValidateTreeSitterQuery(file, query string) (int, string, error) {
+// returns all matches with their line numbers, column numbers, and matched code
+func ValidateTreeSitterQuery(file, query string) ([]Match, error) {
 	contents, err := os.ReadFile(file)
 	if err != nil {
-		return 0, "", fmt.Errorf("failed to read file: %v", err)
+		return nil, fmt.Errorf("failed to read file: %v", err)
 	}
 
 	lang, err := GetTSLanguageFromEnry(file, contents)
 	if err != nil {
-		return 0, "", fmt.Errorf("failed to get language: %v", err)
+		return nil, fmt.Errorf("failed to get language: %v", err)
 	}
 
 	parser := sitter.NewParser()
@@ -63,7 +70,7 @@ func ValidateTreeSitterQuery(file, query string) (int, string, error) {
 
 	q, err := sitter.NewQuery([]byte(query), lang)
 	if err != nil {
-		return 0, "", fmt.Errorf("invalid query: %v", err)
+		return nil, fmt.Errorf("invalid query: %v", err)
 	}
 	defer q.Close()
 
@@ -71,7 +78,7 @@ func ValidateTreeSitterQuery(file, query string) (int, string, error) {
 	defer qc.Close()
 	qc.Exec(q, root)
 
-	// Only retrieve the first relevant capture with @x
+	var matches []Match
 	for {
 		match, ok := qc.NextMatch()
 		if !ok {
@@ -80,14 +87,20 @@ func ValidateTreeSitterQuery(file, query string) (int, string, error) {
 		for _, c := range match.Captures {
 			if q.CaptureNameForId(c.Index) == "x" {
 				row := int(c.Node.StartPoint().Row) + 1
+				col := int(c.Node.StartPoint().Column)
 				code := string(contents[c.Node.StartByte():c.Node.EndByte()])
-				lines := strings.Split(code, "\n")
-				if len(lines) >= 1 {
-					return row, strings.TrimSpace(lines[0]), nil
-				}
-				return row, "", nil
+				matches = append(matches, Match{
+					Row:  row,
+					Col:  col,
+					Code: strings.TrimSpace(code),
+				})
 			}
 		}
 	}
-	return 0, "", fmt.Errorf("no match found for capture @x")
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no match found for capture @x")
+	}
+
+	return matches, nil
 }
