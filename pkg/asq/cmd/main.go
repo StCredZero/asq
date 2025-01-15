@@ -5,16 +5,16 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/alexflint/go-arg"
 	"github.com/StCredZero/asq/pkg/asq"
+	"github.com/alexflint/go-arg"
 )
 
 type TreeSitterCmd struct {
-	File string `arg:"positional,required" help:"Path to Go file with //asq_start and //asq_end tags"`
+	File string `arg:"positional,required" help:"path to go file "`
 }
 
 type QueryCmd struct {
-	File string `arg:"positional,required" help:"Path to Go file with //asq_start and //asq_end tags"`
+	File string `arg:"positional,required" help:"path to asq query file"`
 }
 
 type CLI struct {
