@@ -99,7 +99,7 @@ func Example() {
 	return
 }
 //asq_end`,
-			expected: `(function_declaration name: (identifier) @name (#eq? @name "Example") body: (block (return_statement))) @x`,
+			expected: `Y(function_declaration name: (identifier) @name (#eq? @name "Example") body: (block (return_statement))) @x`,
 		},
 	}
 
@@ -150,7 +150,7 @@ func Example() {
 			var targetLine int
 			var codeLines []string
 			inCodeBlock := false
-			
+
 			for i, line := range lines {
 				trimmed := strings.TrimSpace(line)
 				if trimmed == "//asq_start" {
@@ -165,7 +165,7 @@ func Example() {
 					codeLines = append(codeLines, line)
 				}
 			}
-			
+
 			// Join the lines and trim any leading/trailing whitespace
 			targetCode := strings.TrimSpace(strings.Join(codeLines, "\n"))
 
@@ -177,7 +177,7 @@ func Example() {
 			// Normalize both codes by splitting into lines and trimming each line
 			matchLines := strings.Split(match.Code, "\n")
 			targetLines := strings.Split(targetCode, "\n")
-			
+
 			// Normalize both sets of lines
 			for i := range matchLines {
 				matchLines[i] = strings.TrimSpace(matchLines[i])
@@ -185,10 +185,10 @@ func Example() {
 			for i := range targetLines {
 				targetLines[i] = strings.TrimSpace(targetLines[i])
 			}
-			
+
 			matchCode := strings.Join(matchLines, "\n")
 			normalizedTarget := strings.Join(targetLines, "\n")
-			
+
 			if matchCode != normalizedTarget {
 				t.Errorf("Code mismatch:\nExpected:\n%s\nGot:\n%s", normalizedTarget, matchCode)
 			}
