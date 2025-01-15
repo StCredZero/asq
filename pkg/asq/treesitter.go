@@ -88,11 +88,44 @@ func ValidateTreeSitterQuery(file, query string) ([]Match, error) {
 			if q.CaptureNameForId(c.Index) == "x" {
 				row := int(c.Node.StartPoint().Row) + 1
 				col := int(c.Node.StartPoint().Column)
-				code := string(contents[c.Node.StartByte():c.Node.EndByte()])
+				// Get the complete node content
+				nodeContent := string(contents[c.Node.StartByte():c.Node.EndByte()])
+				
+				// Get the line containing the node
+				lineStart := 0
+				for i := 0; i < int(c.Node.StartPoint().Row); i++ {
+					lineStart = strings.IndexByte(string(contents[lineStart:]), '\n') + lineStart + 1
+				}
+				lineEnd := strings.IndexByte(string(contents[lineStart:]), '\n')
+				if lineEnd == -1 {
+					lineEnd = len(contents)
+				} else {
+					lineEnd += lineStart
+				}
+				
+				// Extract the complete line for context
+				fullLine := string(contents[lineStart:lineEnd])
+				
+				var finalCode string
+				if strings.Contains(fullLine, "/***/") {
+					// For lines with wildcards, use the complete line
+					finalCode = strings.TrimSpace(fullLine)
+				} else if strings.Contains(nodeContent, "\n") {
+					// For multiline nodes (like function declarations), use the node content
+					lines := strings.Split(nodeContent, "\n")
+					for i := range lines {
+						lines[i] = strings.TrimRight(lines[i], " \t\r\n")
+					}
+					finalCode = strings.Join(lines, "\n")
+				} else {
+					// For single-line nodes without wildcards, use the node content
+					finalCode = strings.TrimSpace(nodeContent)
+				}
+				
 				matches = append(matches, Match{
 					Row:  row,
 					Col:  col,
-					Code: strings.TrimSpace(code),
+					Code: finalCode,
 				})
 			}
 		}

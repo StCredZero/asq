@@ -131,36 +131,66 @@ func Example() {
 			}
 
 			// Validate query using tree-sitter
-			lineNum, matchedCode, err := asq.ValidateTreeSitterQuery(testFile, tt.expected)
+			matches, err := asq.ValidateTreeSitterQuery(testFile, tt.expected)
 			if err != nil {
 				t.Errorf("Failed to validate query: %v", err)
 				return
 			}
 
-			// Find the line number of code between asq_start/asq_end
+			if len(matches) == 0 {
+				t.Error("Expected at least one match, got none")
+				return
+			}
+
+			// Get the first match (we're testing single matches in these test cases)
+			match := matches[0]
+
+			// Find the code block between asq_start/asq_end
 			lines := strings.Split(tt.code, "\n")
 			var targetLine int
-			var targetCode string
+			var codeLines []string
+			inCodeBlock := false
+			
 			for i, line := range lines {
-				if strings.TrimSpace(line) == "//asq_start" {
-					// The interesting code is in the next line
-					if i+1 < len(lines) {
-						targetLine = i + 2 // Add 2 because: 1 for 0-based to 1-based, and 1 for the line after asq_start
-						targetCode = strings.TrimSpace(lines[i+1])
-						break
-					}
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "//asq_start" {
+					inCodeBlock = true
+					targetLine = i + 2 // Add 2 because: 1 for 0-based to 1-based, and 1 for the line after asq_start
+					continue
+				}
+				if trimmed == "//asq_end" {
+					break
+				}
+				if inCodeBlock {
+					codeLines = append(codeLines, line)
 				}
 			}
+			
+			// Join the lines and trim any leading/trailing whitespace
+			targetCode := strings.TrimSpace(strings.Join(codeLines, "\n"))
 
 			// Verify line number matches
-			if lineNum != targetLine {
-				t.Errorf("Line number mismatch: expected %d, got %d", targetLine, lineNum)
+			if match.Row != targetLine {
+				t.Errorf("Line number mismatch: expected %d, got %d", targetLine, match.Row)
 			}
 
-			// Verify matched code is a substring of the target code
-			matchedCode = strings.TrimSpace(matchedCode)
-			if !strings.Contains(targetCode, matchedCode) {
-				t.Errorf("Code mismatch:\nExpected to contain: %s\nGot: %s", matchedCode, targetCode)
+			// Normalize both codes by splitting into lines and trimming each line
+			matchLines := strings.Split(match.Code, "\n")
+			targetLines := strings.Split(targetCode, "\n")
+			
+			// Normalize both sets of lines
+			for i := range matchLines {
+				matchLines[i] = strings.TrimSpace(matchLines[i])
+			}
+			for i := range targetLines {
+				targetLines[i] = strings.TrimSpace(targetLines[i])
+			}
+			
+			matchCode := strings.Join(matchLines, "\n")
+			normalizedTarget := strings.Join(targetLines, "\n")
+			
+			if matchCode != normalizedTarget {
+				t.Errorf("Code mismatch:\nExpected:\n%s\nGot:\n%s", normalizedTarget, matchCode)
 			}
 		})
 	}
