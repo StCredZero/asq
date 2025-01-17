@@ -12,6 +12,9 @@ go install github.com/StCredZero/asq/cmd/asq@latest
 
 ### Using Homebrew
 
+*Coming soon with first release*
+
+After the first release, you'll be able to install using:
 ```bash
 brew tap StCredZero/asq
 brew install asq
