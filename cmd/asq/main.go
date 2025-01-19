@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/StCredZero/asq/pkg/asq"
 	"github.com/alexflint/go-arg"
@@ -50,7 +51,7 @@ func main() {
 				return err
 			}
 			// Skip non-Go files
-			if !info.IsDir() && filepath.Ext(path) == ".go" {
+			if !info.IsDir() && filepath.Ext(path) == ".go" && !strings.HasPrefix(filepath.Base(path), "_asq_") {
 				// Validate query against current file
 				matches, err := asq.ValidateTreeSitterQuery(path, query)
 				if err == nil {

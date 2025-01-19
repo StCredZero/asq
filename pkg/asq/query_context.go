@@ -8,82 +8,91 @@ import (
 
 // RangeInterval represents an active interval for a wildcard tag
 type RangeInterval struct {
+	comment  *ast.Comment
 	Start    token.Pos // Start offset in the line
 	TokenEnd token.Pos // End offset in the line
 	End      token.Pos
 }
 
-// passOne is an internal struct used during the first pass of AST processing
+// QueryContext is an internal struct used during the first pass of AST processing
 // to track which identifiers should be treated as wildcards based on active intervals.
-type passOne struct {
+type QueryContext struct {
 	wildcardRanges []RangeInterval // Active intervals for wildcard tags
 }
 
-// newPassOne creates a new passOne instance
-func newPassOne(file *ast.File) *passOne {
-	passOneData := &passOne{
+// NewQueryContext creates a new QueryContext instance
+func NewQueryContext(file *ast.File) (*QueryContext, token.Pos, token.Pos) {
+	queryContext := &QueryContext{
 		wildcardRanges: make([]RangeInterval, 0),
 	}
 
 	// Find the code block between comments
 	var collectingComments bool
-	var endPos token.Pos
+	var startPos, endPos token.Pos
 	for _, cg := range file.Comments {
 		for _, c := range cg.List {
 			if strings.TrimSpace(c.Text) == "//asq_start" {
+				startPos = c.End()
 				collectingComments = true
 			} else if strings.TrimSpace(c.Text) == "//asq_end" {
 				endPos = c.Pos()
 				break
 			}
 			if collectingComments && c.Text == "/***/" {
-				passOneData.addInterval(cg.Pos(), cg.End())
+				queryContext.AddInterval(c)
 			}
 		}
 	}
 	// pad out the last interval to the //asq_end boundary
-	passOneData.setLastIntervalEnd(endPos)
-	return passOneData
+	queryContext.SetLastIntervalEnd(endPos)
+	return queryContext, startPos, endPos
 }
 
-// addInterval adds a new wildcard interval
-func (p *passOne) setLastIntervalEnd(start token.Pos) {
+// SetLastIntervalEnd sets the end of the last wildcard interval
+func (p *QueryContext) SetLastIntervalEnd(start token.Pos) {
 	if len(p.wildcardRanges) > 0 {
 		lastInterval := p.wildcardRanges[len(p.wildcardRanges)-1]
-		lastInterval.End = start - 1
+		Debug("setting last wildcard range %d-%d to %d", lastInterval.Start, lastInterval.End, start-1)
+		lastInterval.End = start
 		p.wildcardRanges[len(p.wildcardRanges)-1] = lastInterval
 	}
 }
 
-// addInterval adds a new wildcard interval
-func (p *passOne) addInterval(start, end token.Pos) {
+// AddInterval adds a new wildcard interval
+func (p *QueryContext) AddInterval(c *ast.Comment) {
+	start, end := c.Pos(), c.End()
+	Debug("=== start add %d-%d", start, end)
 	if len(p.wildcardRanges) > 0 {
-		p.setLastIntervalEnd(start - 1)
+		p.SetLastIntervalEnd(start - 1)
 	}
-	p.wildcardRanges = append(p.wildcardRanges, RangeInterval{
+	newInterval := RangeInterval{
+		comment:  c,
 		Start:    start,
 		End:      end,
 		TokenEnd: end,
-	})
+	}
+	Debug("=== adding wildcard range %d-%d", newInterval.Start, newInterval.End)
+	p.wildcardRanges = append(p.wildcardRanges, newInterval)
 }
 
-// isWildcard checks if the given node should be treated as a wildcard.
+// IsWildcard checks if the given node should be treated as a wildcard.
 // Currently only supports ast.Ident nodes and checks if the node is the first
 // syntactic entity in an active interval.
-func (p *passOne) isWildcard(node ast.Node) bool {
+func (p *QueryContext) IsWildcard(node ast.Node) bool {
 	for {
 		if len(p.wildcardRanges) == 0 {
 			return false
 		}
 		firstRange := p.wildcardRanges[0]
-		if firstRange.Start < node.Pos() && firstRange.End >= node.End() {
+		nodePos, nodeEnd := node.Pos(), node.End()
+		if firstRange.Start < nodePos && firstRange.End >= nodeEnd {
 			p.wildcardRanges = p.wildcardRanges[1:]
 			_, isIdent := node.(*ast.Ident)
 			return isIdent
-		} else if firstRange.End < node.Pos() {
+		} else if firstRange.End < nodePos {
 			p.wildcardRanges = p.wildcardRanges[1:]
 			continue
-		} else if firstRange.End > node.End() {
+		} else if firstRange.End > nodeEnd {
 			break
 		}
 	}

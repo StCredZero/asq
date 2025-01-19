@@ -1,7 +1,8 @@
-package asq
+package asq_test
 
 import (
 	"bytes"
+	"github.com/StCredZero/asq/pkg/asq"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -34,9 +35,9 @@ func main() {
 		t.Fatal("Failed to find BasicLit node")
 	}
 
-	p := newPassOne(file)
+	p, _, _ := asq.NewQueryContext(file)
 	var buf bytes.Buffer
-	node := BuildAsqNode(basicLit, p)
+	node := asq.BuildAsqNode(basicLit, p)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -77,8 +78,9 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(arrayType, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(arrayType, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -118,8 +120,9 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(basicLit, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(basicLit, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -162,8 +165,9 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(structType, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(structType, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -203,8 +207,9 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(mapType, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(mapType, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -244,8 +249,9 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(funcType, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(funcType, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -286,8 +292,9 @@ const (
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(genDecl, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(genDecl, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -327,8 +334,9 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(valueSpec, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(valueSpec, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -368,8 +376,9 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(chanType, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(chanType, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -409,8 +418,9 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(compositeLit, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(compositeLit, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -450,8 +460,9 @@ func Add(x, y int) int {
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(funcDecl, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(funcDecl, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -491,8 +502,9 @@ func main() {
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(funcLit, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(funcLit, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -516,8 +528,9 @@ package test
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(file, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(file, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}
@@ -557,8 +570,9 @@ type Point struct {
 	}
 
 	var buf bytes.Buffer
-	var node Node
-	node = BuildAsqNode(typeSpec, newPassOne(file))
+	var node asq.Node
+	var queryContext, _, _ = asq.NewQueryContext(file)
+	node = asq.BuildAsqNode(typeSpec, queryContext)
 	if err := node.WriteTreeSitterQuery(&buf); err != nil {
 		t.Fatalf("WriteTreeSitterQuery failed: %v", err)
 	}

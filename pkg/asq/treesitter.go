@@ -12,7 +12,7 @@ import (
 )
 
 // ConvertToTreeSitterQuery converts a Go AST node to a tree-sitter query string
-func ConvertToTreeSitterQuery(node ast.Node, p *passOne) (string, error) {
+func ConvertToTreeSitterQuery(node ast.Node, p *QueryContext) (string, error) {
 	var sb strings.Builder
 	metaqNode := BuildAsqNode(node, p)
 	if err := metaqNode.WriteTreeSitterQuery(&sb); err != nil {
@@ -90,7 +90,7 @@ func ValidateTreeSitterQuery(file, query string) ([]Match, error) {
 				col := int(c.Node.StartPoint().Column)
 				// Get the complete node content
 				nodeContent := string(contents[c.Node.StartByte():c.Node.EndByte()])
-				
+
 				// Get the line containing the node
 				lineStart := 0
 				for i := 0; i < int(c.Node.StartPoint().Row); i++ {
@@ -102,10 +102,10 @@ func ValidateTreeSitterQuery(file, query string) ([]Match, error) {
 				} else {
 					lineEnd += lineStart
 				}
-				
+
 				// Extract the complete line for context
 				fullLine := string(contents[lineStart:lineEnd])
-				
+
 				var finalCode string
 				if strings.Contains(fullLine, "/***/") {
 					// For lines with wildcards, use the complete line
@@ -121,7 +121,7 @@ func ValidateTreeSitterQuery(file, query string) ([]Match, error) {
 					// For single-line nodes without wildcards, use the node content
 					finalCode = strings.TrimSpace(nodeContent)
 				}
-				
+
 				matches = append(matches, Match{
 					Row:  row,
 					Col:  col,
