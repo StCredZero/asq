@@ -7,6 +7,8 @@ import (
 	"github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/golang"
 	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"strings"
 )
@@ -136,4 +138,66 @@ func ValidateTreeSitterQuery(file, query string) ([]Match, error) {
 	}
 
 	return matches, nil
+}
+
+// GetSnippetForMatch returns the code snippet for a given match, including context.
+// If the match is within a function, returns the entire function.
+// Otherwise, returns 5 lines before and after the match.
+func GetSnippetForMatch(filePath string, match Match) (string, error) {
+	// Read the file contents
+	contents, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %v", err)
+	}
+
+	// Parse the file for AST analysis
+	fset := token.NewFileSet()
+	astFile, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse file: %v", err)
+	}
+
+	// Find if the match is within a function
+	var containingFunc *ast.FuncDecl
+	ast.Inspect(astFile, func(n ast.Node) bool {
+		if fd, ok := n.(*ast.FuncDecl); ok {
+			// Get the position information
+			startPos := fset.Position(fd.Pos())
+			endPos := fset.Position(fd.End())
+			
+			// Check if match.Row is within this function's lines
+			if match.Row >= startPos.Line && match.Row <= endPos.Line {
+				containingFunc = fd
+				return false // Stop traversal
+			}
+		}
+		return true
+	})
+
+	// Split content into lines for processing
+	lines := strings.Split(string(contents), "\n")
+
+	if containingFunc != nil {
+		// Get the entire function text
+		startPos := fset.Position(containingFunc.Pos())
+		endPos := fset.Position(containingFunc.End())
+		
+		// Extract function lines (convert to 0-based index)
+		functionLines := lines[startPos.Line-1:endPos.Line]
+		return strings.Join(functionLines, "\n"), nil
+	}
+
+	// If not in a function, get 5 lines before and after
+	startLine := match.Row - 5
+	if startLine < 1 {
+		startLine = 1
+	}
+	endLine := match.Row + 5
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+
+	// Extract the lines (convert to 0-based index)
+	contextLines := lines[startLine-1:endLine]
+	return strings.Join(contextLines, "\n"), nil
 }
