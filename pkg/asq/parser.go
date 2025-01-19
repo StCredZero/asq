@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"strings"
 )
 
 // ExtractTreeSitterQuery parses a Go file and extracts the code between //asq_start and //asq_end
@@ -17,28 +16,7 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 		return "", fmt.Errorf("failed to parse file: %v", err)
 	}
 
-	passOneData := newPassOne(astFile)
-
-	// Find the code block between comments
-	var collectingComments bool
-	var startPos, endPos token.Pos
-	for _, cg := range astFile.Comments {
-		for _, c := range cg.List {
-			if strings.TrimSpace(c.Text) == "//asq_start" {
-				collectingComments = true
-				startPos = c.End()
-			} else if strings.TrimSpace(c.Text) == "//asq_end" {
-				endPos = c.Pos()
-				break
-			}
-			if collectingComments && c.Text == "/***/" {
-				passOneData.addInterval(cg.Pos(), cg.End())
-			}
-		}
-	}
-	// pad out the last interval to the //asq_end boundary
-	passOneData.setLastIntervalEnd(endPos)
-
+	queryContext, startPos, endPos := NewQueryContext(astFile)
 	if !startPos.IsValid() || !endPos.IsValid() {
 		return "", fmt.Errorf("could not find //asq_start and //asq_end comments")
 	}
@@ -67,5 +45,5 @@ func ExtractTreeSitterQuery(filePath string) (string, error) {
 	}
 
 	// Convert to tree-sitter query
-	return ConvertToTreeSitterQuery(foundNode, passOneData)
+	return ConvertToTreeSitterQuery(foundNode, queryContext)
 }

@@ -9,7 +9,7 @@ import (
 )
 
 // BuildAsqNode converts an ast.Node to its corresponding asq.Node
-func BuildAsqNode(node ast.Node, p *passOne) Node {
+func BuildAsqNode(node ast.Node, p *QueryContext) Node {
 	if node == nil {
 		return nil
 	}
@@ -35,7 +35,7 @@ func BuildAsqNode(node ast.Node, p *passOne) Node {
 	case *ast.Ident:
 		ident := &Ident{
 			Ast:      astObj,
-			Wildcard: p.isWildcard(astObj),
+			Wildcard: p.IsWildcard(astObj),
 		}
 		ident.exprNode()
 		return ident
@@ -212,7 +212,7 @@ func BuildAsqNode(node ast.Node, p *passOne) Node {
 }
 
 // BuildAsqExpr converts an ast.Node to its corresponding asq.Node
-func BuildAsqExpr(node ast.Node, p *passOne) Expr {
+func BuildAsqExpr(node ast.Node, p *QueryContext) Expr {
 	if node == nil {
 		return nil
 	}
@@ -241,7 +241,7 @@ func BuildAsqExpr(node ast.Node, p *passOne) Expr {
 	case *ast.Ident:
 		return &Ident{
 			Ast:      astObj,
-			Wildcard: p.isWildcard(astObj),
+			Wildcard: p.IsWildcard(astObj),
 		}
 	default:
 		return &DefaultExpr{Node: astObj}
@@ -1611,7 +1611,7 @@ func (r *ReturnStmt) AstNode() ast.Node {
 // Removed duplicate FuncDecl implementation
 
 // BuildAsqStmt converts an ast.Stmt to its corresponding asq.Stmt
-func BuildAsqStmt(stmt ast.Stmt, p *passOne) Stmt {
+func BuildAsqStmt(stmt ast.Stmt, p *QueryContext) Stmt {
 	if stmt == nil {
 		return nil
 	}
@@ -1736,7 +1736,7 @@ func BuildAsqStmt(stmt ast.Stmt, p *passOne) Stmt {
 }
 
 // BuildAsqDecl converts an ast.Decl to its corresponding asq.Decl
-func BuildAsqDecl(decl ast.Decl, p *passOne) Decl {
+func BuildAsqDecl(decl ast.Decl, p *QueryContext) Decl {
 	if decl == nil {
 		return nil
 	}
