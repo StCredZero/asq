@@ -15,7 +15,8 @@ type TreeSitterCmd struct {
 }
 
 type QueryCmd struct {
-	File string `arg:"positional,required" help:"path to asq query file"`
+	File   string `arg:"positional,required" help:"path to asq query file"`
+	Cursor bool   `arg:"--cursor" help:"Output code snippet in <especially_relevant_code_snippet> format"`
 }
 
 type CLI struct {
@@ -56,7 +57,20 @@ func main() {
 				matches, err := asq.ValidateTreeSitterQuery(path, query)
 				if err == nil {
 					for _, match := range matches {
-						fmt.Printf("//asq_match %s:%d:%d\n%s\n", path, match.Row, match.Col, match.Code)
+						if cli.Query.Cursor {
+							snippet, err := asq.GetSnippetForMatch(path, match)
+							if err != nil {
+								fmt.Fprintf(os.Stderr, "Error getting snippet: %v\n", err)
+								continue
+							}
+							fmt.Printf("<especially_relevant_code_snippet>\n")
+							fmt.Printf("go\n")
+							fmt.Printf("%s:%d\n", path, match.Row)
+							fmt.Printf("%s\n", snippet)
+							fmt.Printf("</especially_relevant_code_snippet>\n\n")
+						} else {
+							fmt.Printf("//asq_match %s:%d:%d\n%s\n", path, match.Row, match.Col, match.Code)
+						}
 					}
 				}
 			}
