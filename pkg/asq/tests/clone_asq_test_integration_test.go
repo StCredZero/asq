@@ -77,7 +77,9 @@ func TestCloneAsqTest(t *testing.T) {
 		cmd := exec.Command("asq", "query", "_asq_query.go")
 		cmd.Dir = testDir
 		var stdoutBuf bytes.Buffer
+		var stderrBuf bytes.Buffer
 		cmd.Stdout = &stdoutBuf
+		cmd.Stderr = &stderrBuf
 
 		// 5. Run the command
 		if err := cmd.Run(); err != nil {
