@@ -28,7 +28,7 @@ func TestCloneAsqTest(t *testing.T) {
 	testcasesDir := filepath.Join(tmpDir, "asq-test", "testcases")
 	entries, err := os.ReadDir(testcasesDir)
 	if err != nil {
-		t.Skipf("Skipping test: testcases directory not found: %v\nThis is expected if the asq-test repository hasn't been populated with test cases yet.", err)
+		t.Skipf("Skipping test: testcases directory not found at %s: %v\nThis is expected if the asq-test repository hasn't been populated with test cases yet.", testcasesDir, err)
 		return
 	}
 	if len(entries) == 0 {
