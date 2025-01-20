@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"github.com/StCredZero/asq/pkg/slicex"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,6 +33,8 @@ func listDirContents(dir string) string {
 	return fmt.Sprintf("%v", contents)
 }
 
+// TestCloneAsqTest clones github.com/StCredZero/asq-test and runs the test cases in the
+// testcases directory.
 func TestCloneAsqTest(t *testing.T) {
 	// 1. Create a temporary directory
 	tmpDir, err := os.MkdirTemp("", "asq-external-")
@@ -71,12 +74,10 @@ func TestCloneAsqTest(t *testing.T) {
 		// e.g. testDir = .../testcases/test0001
 
 		// 4. Build the 'asq query _asq_query.go' command
-		asqPath := "/usr/local/bin/asq"
-		cmd := exec.Command(asqPath, "query", "_asq_query.go")
+		cmd := exec.Command("asq", "query", "_asq_query.go")
 		cmd.Dir = testDir
-		var stdoutBuf, stderrBuf bytes.Buffer
+		var stdoutBuf bytes.Buffer
 		cmd.Stdout = &stdoutBuf
-		cmd.Stderr = &stderrBuf
 
 		// 5. Run the command
 		if err := cmd.Run(); err != nil {
@@ -94,21 +95,23 @@ func TestCloneAsqTest(t *testing.T) {
 		// Normalize whitespace like in ts_query_test.go
 		actualLines := strings.Split(actualOutput, "\n")
 		expectedLines := strings.Split(string(expectedContent), "\n")
-		
+
 		// Normalize both sets of lines
-		for i := range actualLines {
-			actualLines[i] = strings.TrimSpace(actualLines[i])
-		}
-		for i := range expectedLines {
-			expectedLines[i] = strings.TrimSpace(expectedLines[i])
-		}
-		
+		actualLines = slicex.Map(actualLines, func(s string) string {
+			return strings.TrimSpace(s)
+		})
+		expectedLines = slicex.Map(expectedLines, func(s string) string {
+			return strings.TrimSpace(s)
+		})
+
 		actualNormalized := strings.Join(actualLines, "\n")
 		expectedNormalized := strings.Join(expectedLines, "\n")
 
 		if actualNormalized != expectedNormalized {
 			t.Errorf("Mismatch in directory %s\nExpected:\n%s\nGot:\n%s",
 				entry.Name(), expectedNormalized, actualNormalized)
+		} else {
+			fmt.Printf("%s passed\n", entry.Name())
 		}
 	}
 }
