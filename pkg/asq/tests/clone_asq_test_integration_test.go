@@ -79,7 +79,8 @@ func TestCloneAsqTest(t *testing.T) {
 
 		// 5. Run the command
 		if err := cmd.Run(); err != nil {
-			t.Fatalf("asq query command failed in %s: %v\nStderr: %s", testDir, err, stderrBuf.String())
+			t.Fatalf("asq query command failed in %s: %v\nCommand output:\nstdout: %s\nstderr: %s", 
+				testDir, err, stdoutBuf.String(), stderrBuf.String())
 		}
 
 		// 6. Compare output to 'expected' file
