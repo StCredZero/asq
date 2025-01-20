@@ -2,12 +2,35 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// Helper function to list directory contents recursively
+func listDirContents(dir string) string {
+	var contents []string
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		if rel != "." {
+			contents = append(contents, rel)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Sprintf("Error listing directory: %v", err)
+	}
+	return fmt.Sprintf("%v", contents)
+}
 
 func TestCloneAsqTest(t *testing.T) {
 	// 1. Create a temporary directory
@@ -23,6 +46,10 @@ func TestCloneAsqTest(t *testing.T) {
 	if out, err := cloneCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to clone asq-test repository: %v\nOutput: %s", err, string(out))
 	}
+
+	// List repository contents after clone
+	repoDir := filepath.Join(tmpDir, "asq-test")
+	t.Logf("Repository contents after clone: %v", listDirContents(repoDir))
 
 	// 3. Look for testcases/ subdirectories in asq-test
 	testcasesDir := filepath.Join(tmpDir, "asq-test", "testcases")
@@ -44,14 +71,16 @@ func TestCloneAsqTest(t *testing.T) {
 		// e.g. testDir = .../testcases/test0001
 
 		// 4. Build the 'asq query _asq_query.go' command
-		cmd := exec.Command("asq", "query", "_asq_query.go")
+		asqPath := "/usr/local/bin/asq"
+		cmd := exec.Command(asqPath, "query", "_asq_query.go")
 		cmd.Dir = testDir
-		var stdoutBuf bytes.Buffer
+		var stdoutBuf, stderrBuf bytes.Buffer
 		cmd.Stdout = &stdoutBuf
+		cmd.Stderr = &stderrBuf
 
 		// 5. Run the command
 		if err := cmd.Run(); err != nil {
-			t.Fatalf("asq query command failed in %s: %v", testDir, err)
+			t.Fatalf("asq query command failed in %s: %v\nStderr: %s", testDir, err, stderrBuf.String())
 		}
 
 		// 6. Compare output to 'expected' file

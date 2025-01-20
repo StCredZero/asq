@@ -17,17 +17,29 @@ jobs:
         with:
           go-version: '1.21'
           
-      - name: Build asq binary
+      - name: Build and setup asq binary
         run: |
+          # Build the binary
           go build -v -o asq ./cmd/asq
           chmod +x asq
-          sudo mv asq /usr/local/bin/
-          # Verify asq is in PATH
-          which asq
+          
+          # Create bin directory in workspace
+          mkdir -p $GITHUB_WORKSPACE/bin
+          mv asq $GITHUB_WORKSPACE/bin/
+          
+          # Add to PATH for this and subsequent steps
+          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
+          
+          # Verify asq is in PATH (this will use the updated PATH)
+          echo "Current PATH: $PATH"
+          which asq || true
           asq --version || true
         
       - name: Test
         run: |
-          # Ensure asq is available
+          # Ensure asq is available in test environment
+          echo "Current PATH: $PATH"
           which asq
+          
+          # Run tests with verbose output
           go test -v ./...
