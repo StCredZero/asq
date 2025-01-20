@@ -50,10 +50,6 @@ func TestCloneAsqTest(t *testing.T) {
 		t.Fatalf("Failed to clone asq-test repository: %v\nOutput: %s", err, string(out))
 	}
 
-	// List repository contents after clone
-	repoDir := filepath.Join(tmpDir, "asq-test")
-	t.Logf("Repository contents after clone: %v", listDirContents(repoDir))
-
 	// 3. Look for testcases/ subdirectories in asq-test
 	testcasesDir := filepath.Join(tmpDir, "asq-test", "testcases")
 	entries, err := os.ReadDir(testcasesDir)
