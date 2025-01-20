@@ -23,12 +23,8 @@ jobs:
           go build -v -o asq ./cmd/asq
           chmod +x asq
           
-          # Create bin directory in workspace
-          mkdir -p $GITHUB_WORKSPACE/bin
-          mv asq $GITHUB_WORKSPACE/bin/
-          
-          # Add to PATH for this and subsequent steps
-          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
+          # Move binary to /usr/local/bin (which is already in PATH)
+          sudo mv asq /usr/local/bin/
           
           # Verify asq is in PATH (this will use the updated PATH)
           echo "Current PATH: $PATH"
