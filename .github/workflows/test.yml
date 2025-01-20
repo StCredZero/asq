@@ -22,6 +22,12 @@ jobs:
           go build -v -o asq ./cmd/asq
           chmod +x asq
           sudo mv asq /usr/local/bin/
+          # Verify asq is in PATH
+          which asq
+          asq --version || true
         
       - name: Test
-        run: go test -v ./...
+        run: |
+          # Ensure asq is available
+          which asq
+          go test -v ./...
