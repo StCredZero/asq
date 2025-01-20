@@ -31,10 +31,17 @@ func NewQueryContext(file *ast.File) (*QueryContext, token.Pos, token.Pos) {
 	var startPos, endPos token.Pos
 	for _, cg := range file.Comments {
 		for _, c := range cg.List {
-			if strings.TrimSpace(c.Text) == "//asq_start" {
+			// Normalize comment text by removing comment markers and whitespace
+			trimmed := strings.TrimSpace(c.Text)
+			trimmed = strings.TrimPrefix(trimmed, "//")
+			trimmed = strings.TrimPrefix(trimmed, "/*")
+			trimmed = strings.TrimSuffix(trimmed, "*/")
+			trimmed = strings.TrimSpace(trimmed)
+
+			if trimmed == "asq_start" {
 				startPos = c.End()
 				collectingComments = true
-			} else if strings.TrimSpace(c.Text) == "//asq_end" {
+			} else if trimmed == "asq_end" {
 				endPos = c.Pos()
 				break
 			}
@@ -76,9 +83,18 @@ func (p *QueryContext) AddInterval(c *ast.Comment) {
 }
 
 // IsWildcard checks if the given node should be treated as a wildcard.
-// Currently only supports ast.Ident nodes and checks if the node is the first
-// syntactic entity in an active interval.
+// A node is considered a wildcard if either:
+// 1. It is an ast.Ident node with a name prefixed by "_asq_"
+// 2. It is the first syntactic entity in an active interval
 func (p *QueryContext) IsWildcard(node ast.Node) bool {
+	// Check for _asq_ prefix in identifiers
+	if ident, isIdent := node.(*ast.Ident); isIdent {
+		if strings.HasPrefix(ident.Name, "_asq_") {
+			return true
+		}
+	}
+
+	// Check for interval-based wildcards
 	for {
 		if len(p.wildcardRanges) == 0 {
 			return false
