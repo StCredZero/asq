@@ -10,6 +10,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -50,6 +51,165 @@ type Match struct {
 	Row  int
 	Col  int
 	Code string
+}
+
+// MatchGroup represents a group of matches that should be displayed together
+type MatchGroup struct {
+	FilePath    string
+	StartLine   int
+	EndLine     int
+	Snippet     string
+	IsFunction  bool
+	FunctionPos token.Pos // Used for sorting function groups
+}
+
+// GroupMatchesForCursorDedup takes a list of matches for a file and groups them
+// by their containing functions or root-level context. Returns groups sorted by position.
+func GroupMatchesForCursorDedup(filePath string, matches []Match) ([]MatchGroup, error) {
+	if len(matches) == 0 {
+		return nil, nil
+	}
+
+	// Read and parse the file
+	contents, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %v", err)
+	}
+
+	fset := token.NewFileSet()
+	astFile, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse file: %v", err)
+	}
+
+	// Map to track matches by function
+	functionGroups := make(map[*ast.FuncDecl][]Match)
+	var rootMatches []Match
+
+	// Find containing functions for all matches
+	for _, match := range matches {
+		var foundFunc *ast.FuncDecl
+		ast.Inspect(astFile, func(n ast.Node) bool {
+			if fd, ok := n.(*ast.FuncDecl); ok {
+				startPos := fset.Position(fd.Pos())
+				endPos := fset.Position(fd.End())
+				if match.Row >= startPos.Line && match.Row <= endPos.Line {
+					foundFunc = fd
+					return false
+				}
+			}
+			return true
+		})
+
+		if foundFunc != nil {
+			functionGroups[foundFunc] = append(functionGroups[foundFunc], match)
+		} else {
+			rootMatches = append(rootMatches, match)
+		}
+	}
+
+	// Create result groups
+	var groups []MatchGroup
+	lines := strings.Split(string(contents), "\n")
+
+	// Handle root-level matches first
+	if len(rootMatches) > 0 {
+		// Sort root matches by line number
+		sort.Slice(rootMatches, func(i, j int) bool {
+			return rootMatches[i].Row < rootMatches[j].Row
+		})
+
+		// Find min and max lines
+		minLine := rootMatches[0].Row
+		maxLine := rootMatches[len(rootMatches)-1].Row
+
+		// Add context lines
+		startLine := minLine - 5
+		if startLine < 1 {
+			startLine = 1
+		}
+		endLine := maxLine + 5
+		if endLine > len(lines) {
+			endLine = len(lines)
+		}
+
+		// Extract lines, excluding any that are part of functions
+		var contextLines []string
+		for i := startLine - 1; i < endLine; i++ {
+			isInFunction := false
+			ast.Inspect(astFile, func(n ast.Node) bool {
+				if fd, ok := n.(*ast.FuncDecl); ok {
+					startPos := fset.Position(fd.Pos())
+					endPos := fset.Position(fd.End())
+					if i+1 >= startPos.Line && i+1 <= endPos.Line {
+						isInFunction = true
+						return false
+					}
+				}
+				return true
+			})
+			if !isInFunction {
+				contextLines = append(contextLines, lines[i])
+			}
+		}
+
+		if len(contextLines) > 0 {
+			// Trim leading and trailing empty lines while preserving internal spacing
+			start := 0
+			end := len(contextLines)
+			
+			// Find first non-empty line
+			for start < end && strings.TrimSpace(contextLines[start]) == "" {
+				start++
+			}
+			
+			// Find last non-empty line
+			for end > start && strings.TrimSpace(contextLines[end-1]) == "" {
+				end--
+			}
+			
+			if start < end {
+				groups = append(groups, MatchGroup{
+					FilePath:   filePath,
+					StartLine:  startLine + start,
+					EndLine:    startLine + end - 1,
+					Snippet:    strings.Join(contextLines[start:end], "\n"),
+					IsFunction: false,
+				})
+			}
+		}
+	}
+
+	// Handle function groups
+	for fd := range functionGroups {
+		startPos := fset.Position(fd.Pos())
+		endPos := fset.Position(fd.End())
+		functionLines := lines[startPos.Line-1:endPos.Line]
+		groups = append(groups, MatchGroup{
+			FilePath:    filePath,
+			StartLine:   startPos.Line,
+			EndLine:     endPos.Line,
+			Snippet:     strings.Join(functionLines, "\n"),
+			IsFunction:  true,
+			FunctionPos: fd.Pos(),
+		})
+	}
+
+	// Sort groups by position (functions first, then root)
+	sort.Slice(groups, func(i, j int) bool {
+		if groups[i].IsFunction && groups[j].IsFunction {
+			return groups[i].FunctionPos < groups[j].FunctionPos
+		}
+		if groups[i].IsFunction {
+			return true
+		}
+		if groups[j].IsFunction {
+			return false
+		}
+		return groups[i].StartLine < groups[j].StartLine
+	})
+
+	return groups, nil
 }
 
 // ValidateTreeSitterQuery executes a tree-sitter query directly on the given file
