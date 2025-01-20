@@ -1,0 +1,41 @@
+name: Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          
+      - name: Build and setup asq binary
+        run: |
+          # Build the binary
+          go build -v -o asq ./cmd/asq
+          chmod +x asq
+          
+          # Move binary to /usr/local/bin (which is already in PATH)
+          sudo mv asq /usr/local/bin/
+          
+          # Verify asq is in PATH (this will use the updated PATH)
+          echo "Current PATH: $PATH"
+          which asq || true
+          asq --version || true
+        
+      - name: Test
+        run: |
+          # Ensure asq is available in test environment
+          echo "Current PATH: $PATH"
+          which asq
+          
+          # Run tests with verbose output
+          go test -v ./...
